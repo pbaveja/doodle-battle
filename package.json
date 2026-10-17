@@ -7,7 +7,7 @@
   "scripts": {
     "build": "esbuild src/client/main.ts --bundle --minify --sourcemap --format=esm --target=es2020,safari15 --outfile=public/assets/app.js",
     "dev": "npm run build && wrangler dev",
-    "deploy": "npm run build && wrangler deploy",
+    "deploy": "npm run build && wrangler deploy --env=\"\"",
     "ship": "npm install && npm run deploy",
     "typecheck": "tsc -p tsconfig.json",
     "logs": "wrangler tail",
