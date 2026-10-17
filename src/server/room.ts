@@ -3,7 +3,7 @@
 // through the small `RoomIO` interface below.
 
 import {
-  CLOSE, INKS, LIMITS, PID_RE, PROTOCOL, TIMING,
+  CLOSE, HEARTBEAT, INKS, LIMITS, PID_RE, PROTOCOL, TIMING,
   type ChatKind, type ChatMsg, type EndReason, type ErrCode, type GalleryEntry, type Item,
   type Phase, type PlayerView, type Result, type RoomInfo, type ServerMsg, type Settings,
   type Timing, type TurnScore, type View,
@@ -41,6 +41,8 @@ export interface RoomIO {
   remove(keys: string[]): void;
   /** Read a saved drawing (key `gal:<turn>`) and send it to one connection. */
   sendGallery(cid: string, turn: number): void;
+  /** When the platform last answered this connection's heartbeat without waking the room, if it does. */
+  lastHeartbeat(cid: string): number | null;
   destroy(): void;
   now(): number;
   random(): number;
@@ -241,7 +243,8 @@ export class RoomCore {
     this.ownerId = snap.owner ?? snap.host;
     this.phase = snap.phase;
     this.settings = { ...defaultSettings(), ...snap.settings };
-    this.players = new Map(snap.players.map((p) => [p.id, { ...p, cid: null, leftAt: p.leftAt ?? now, away: false, awaySince: null }]));
+    // Away is kept: after waking from hibernation the sockets are still open and may still be in the background.
+    this.players = new Map(snap.players.map((p) => [p.id, { ...p, cid: null, leftAt: p.leftAt ?? now }]));
     this.seatCounter = snap.seatCounter;
     this.round = snap.round;
     this.queue = snap.queue;
@@ -289,7 +292,7 @@ export class RoomCore {
     if (p) {
       p.cid = cid;
       p.leftAt = null;
-      if (this.turn?.drawer === pid) this.turn.drawerAwaySince = null;
+      if (this.turn?.drawer === pid && !p.away) this.turn.drawerAwaySince = null;
       this.emptySince = null;
     }
   }
@@ -364,6 +367,11 @@ export class RoomCore {
     if (!conn) return;
     conn.seen = this.io.now();
     if (typeof raw !== "string") return;
+    if (raw === HEARTBEAT) {
+      // Cloudflare answers these before they reach the room; this covers anything that doesn't.
+      this.io.send(cid, HEARTBEAT);
+      return;
+    }
     if (raw.length > 400_000) {
       this.io.close(cid, CLOSE.BAD_HELLO, "message too large");
       return;
@@ -979,7 +987,8 @@ export class RoomCore {
         this.io.close(cid, CLOSE.BAD_HELLO, "no hello");
         return true;
       }
-      if (c.pid && now - c.seen > this.timing.staleMs) {
+      // Heartbeats the platform answered count too: they never reach onMessage.
+      if (c.pid && now - c.seen > this.timing.staleMs && now - (this.io.lastHeartbeat(cid) ?? 0) > this.timing.staleMs) {
         this.dropConn(cid, now);
         this.io.close(cid, 1001, "silent");
         return true;
@@ -1063,7 +1072,7 @@ export class RoomCore {
     return false;
   }
 
-  private nextWake(): { at: number | null; durable: number | null } {
+  private nextWake(now: number): { at: number | null; durable: number | null } {
     const times: number[] = [];
     const add = (n: number | null | undefined) => {
       if (typeof n === "number" && Number.isFinite(n)) times.push(n);
@@ -1079,7 +1088,8 @@ export class RoomCore {
     const hold = this.inGame() ? this.timing.seatHoldGameMs : this.timing.seatHoldLobbyMs;
     for (const p of this.players.values()) if (!p.cid && p.leftAt !== null) add(p.leftAt + hold);
     const host = this.players.get(this.hostId);
-    if (host && !this.isActive(host) && !this.inGame()) {
+    // Same rule as step(): the role only moves when someone active can take it.
+    if (host && !this.isActive(host) && !this.inGame() && this.connectedCount() > 0) {
       const since = host.cid ? host.awaySince : host.leftAt;
       if (since != null) add(since + this.timing.hostGraceMs);
     }
@@ -1088,7 +1098,10 @@ export class RoomCore {
     const durable = times.length ? Math.min(...times) : null;
     if (this.stateDirty) add(this.lastStateSave + this.timing.stateSaveMs);
     if (this.canvasDirty) add(this.lastCanvasSave + this.timing.canvasSaveMs);
-    return { at: times.length ? Math.min(...times) : null, durable };
+    // Anything still due after tick() is something step() can't act on yet. Look again in a second
+    // instead of asking for a wake-up in the past, which would re-fire the alarm in a tight loop.
+    const notPast = (n: number | null) => (n !== null && n <= now ? now + 1000 : n);
+    return { at: notPast(times.length ? Math.min(...times) : null), durable: notPast(durable) };
   }
 
   /* =================== drawing =================== */
@@ -1326,7 +1339,7 @@ export class RoomCore {
       this.lastCanvasSave = now;
     }
     if (Object.keys(writes).length) this.io.save(writes);
-    const w = this.nextWake();
+    const w = this.nextWake(now);
     this.io.schedule(w.at, w.durable);
   }
 }

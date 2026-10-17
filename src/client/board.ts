@@ -164,6 +164,13 @@ export type Tool = "brush" | "fill" | "eraser";
 
 type Queued = { due: number; op: Op } | { due: number; pts: [number, number]; last: boolean };
 
+/** The drawer sends new points this often; viewers spread each batch over the same time. */
+const BATCH_MS = 100;
+/** Viewers play strokes this far behind, a little over one batch, so network jitter doesn't show. */
+const PLAYOUT_MS = BATCH_MS + 5;
+/** A viewer this far behind skips the buffer and catches up. */
+const MAX_LAG_MS = 450;
+
 export class Board {
   readonly canvas: HTMLCanvasElement;
   readonly ctx: Ctx;
@@ -241,11 +248,11 @@ export class Board {
     }
     this.recvV += ops.length;
     const now = performance.now();
-    let base = Math.max(now + 45, this.lastDue);
-    if (base - now > 320) base = now; // fell behind: catch up
+    let base = Math.max(now + PLAYOUT_MS, this.lastDue);
+    if (base - now > MAX_LAG_MS) base = now; // fell behind: catch up
     let total = 0;
     for (const op of ops) if (op.k === "m") total += op.p.length / 2;
-    const step = total > 0 ? 40 / total : 0;
+    const step = total > 0 ? BATCH_MS / total : 0;
     let n = 0;
     for (const op of ops) {
       if (op.k === "m") {
@@ -335,10 +342,10 @@ export class Board {
     this.v++;
     this.recvV = this.v;
     this.outbox.push(op);
-    if (op.k === "b") {
-      this.points += 1;
-      this.scheduleFlush();
-    } else this.flushOutbox();
+    if (op.k === "b") this.points += 1;
+    // A stroke's start and end ride along with the next batch of points; fills, undo and clear go at once.
+    if (op.k === "b" || op.k === "e") this.scheduleFlush();
+    else this.flushOutbox();
   }
 
   private flushPending() {
@@ -359,7 +366,7 @@ export class Board {
       this.flushPending();
       this.flushOutbox();
       if (this.activeId !== null) this.scheduleFlush();
-    }, 40);
+    }, BATCH_MS);
   }
 
   private flushOutbox() {

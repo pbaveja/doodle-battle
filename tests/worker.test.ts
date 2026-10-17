@@ -1,6 +1,7 @@
 // Exercises the Cloudflare Durable Object wrapper (worker.ts) against a fake runtime:
 // storage, alarms, hibernatable sockets with attachments, and waking from hibernation.
 import { describe, expect, test } from "bun:test";
+import { HEARTBEAT, TIMING } from "../src/shared/protocol";
 
 class FakeSocket {
   sent: string[] = [];
@@ -30,6 +31,9 @@ class FakeSocket {
     this[1] = new FakeSocket();
   }
 };
+(globalThis as any).WebSocketRequestResponsePair = class {
+  constructor(public request: string, public response: string) {}
+};
 const RealResponse = Response;
 (globalThis as any).Response = class extends RealResponse {
   webSocket: unknown;
@@ -43,6 +47,9 @@ function fakeCtx() {
   const data = new Map<string, unknown>();
   const sockets: FakeSocket[] = [];
   let alarm: number | null = null;
+  let autoResponse: unknown = null;
+  /** When the platform last answered each socket's heartbeat. */
+  const heartbeats = new Map<FakeSocket, number>();
   const storage = {
     async get(k: string | string[]) {
       if (Array.isArray(k)) return new Map(k.filter((x) => data.has(x)).map((x) => [x, structuredClone(data.get(x))]));
@@ -61,12 +68,27 @@ function fakeCtx() {
     blockConcurrencyWhile: async (fn: () => Promise<unknown>) => fn(),
     acceptWebSocket: (ws: FakeSocket) => { sockets.push(ws); },
     getWebSockets: () => sockets.filter((s) => !s.closed),
+    setWebSocketAutoResponse: (pair: unknown) => { autoResponse = structuredClone(pair); },
+    getWebSocketAutoResponseTimestamp: (ws: FakeSocket) => (heartbeats.has(ws) ? new Date(heartbeats.get(ws)!) : null),
   };
-  return { ctx, data, sockets, getAlarm: () => alarm };
+  return { ctx, data, sockets, heartbeats, getAlarm: () => alarm, getAutoResponse: () => autoResponse };
 }
 
 const { Room, default: worker } = await import("../src/server/worker");
 const tick = () => new Promise((r) => setTimeout(r, 5));
+const claim = () => new Request("https://room/claim", { method: "POST", headers: { "x-room": "ABCDE" } });
+
+async function joinAll(f: ReturnType<typeof fakeCtx>, room: any, names: string[]) {
+  const out: FakeSocket[] = [];
+  for (const [i, name] of names.entries()) {
+    await room.fetch(new Request("https://room/ws", { headers: { "x-room": "ABCDE" } }));
+    const ws = f.sockets[f.sockets.length - 1];
+    room.webSocketMessage(ws, JSON.stringify({ t: "hello", v: 3, pid: `player-${i}-abcdef`, secret: "s".repeat(24), name, color: i, face: i }));
+    out.push(ws);
+  }
+  await tick();
+  return out;
+}
 
 describe("Durable Object wrapper", () => {
   test("claim, join over a socket, play, and wake from hibernation", async () => {
@@ -100,7 +122,9 @@ describe("Durable Object wrapper", () => {
     await tick();
     let v = last(players[0], "state").s;
     expect(v.phase).toBe("choosing");
-    expect(f.getAlarm()).toBe(v.phaseEnds); // durable alarm set for the phase deadline
+    // The in-memory timer handles the phase deadline; the durable alarm is a backup a little later.
+    expect(f.getAlarm()!).toBeGreaterThan(v.phaseEnds!);
+    expect(f.getAlarm()! - v.phaseEnds!).toBeLessThanOrEqual(5000);
     const drawerWs = v.drawer === "player-0-abcdef" ? players[0] : players[1];
     const guesserWs = drawerWs === players[0] ? players[1] : players[0];
     room.webSocketMessage(drawerWs, JSON.stringify({ t: "choose", i: 0 }));
@@ -143,6 +167,40 @@ describe("Durable Object wrapper", () => {
     room2.webSocketClose(guesserWs, 4000, "left");
     await tick();
     expect(last(drawerWs, "state").s.players.length).toBe(1);
+  });
+
+  test("heartbeats are answered by the platform and keep quiet sockets in the room", async () => {
+    const f = fakeCtx();
+    const room: any = new Room(f.ctx as any, {} as any);
+    await tick();
+    expect(f.getAutoResponse()).toEqual({ request: HEARTBEAT, response: HEARTBEAT });
+    await room.fetch(claim());
+    const [asha, ben, chen] = await joinAll(f, room, ["Asha", "Ben", "Chen"]);
+    // 100 seconds on: Ben's heartbeats are still being answered, Chen's phone has frozen.
+    const realNow = Date.now;
+    const later = realNow() + 100_000;
+    f.heartbeats.set(ben, later);
+    Date.now = () => later;
+    try {
+      room.webSocketMessage(asha, JSON.stringify({ t: "chat", text: "still there?" }));
+    } finally {
+      Date.now = realNow;
+    }
+    expect(ben.closed).toBeNull();
+    expect(chen.closed?.code).toBe(1001);
+  });
+
+  test("a long wait gets an exact alarm, since no in-memory timer covers it", async () => {
+    const f = fakeCtx();
+    const room: any = new Room(f.ctx as any, {} as any);
+    await tick();
+    await room.fetch(claim());
+    const [, ben] = await joinAll(f, room, ["Asha", "Ben"]);
+    const left = Date.now();
+    room.webSocketClose(ben, 1006, "gone");
+    await tick();
+    // Ben's seat is held for three minutes.
+    expect(Math.abs(f.getAlarm()! - (left + TIMING.seatHoldLobbyMs))).toBeLessThan(1000);
   });
 
   test("worker routes", async () => {

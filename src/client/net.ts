@@ -1,10 +1,10 @@
 // Reconnecting WebSocket with heartbeats and server clock sync.
 
-import { FATAL_CLOSES, type ClientMsg, type ServerMsg } from "../shared/protocol";
+import { FATAL_CLOSES, HEARTBEAT, type ClientMsg, type ServerMsg } from "../shared/protocol";
 
 export type ConnStatus = "connecting" | "open" | "retrying" | "closed" | "stopped";
 
-const PING_EVERY = 10_000;
+const HEARTBEAT_EVERY = 10_000;
 const PONG_TIMEOUT = 6_000;
 const OPEN_TIMEOUT = 8_000;
 
@@ -24,7 +24,7 @@ export class Conn {
   private ws: WebSocket | null = null;
   private retryTimer = 0;
   private openTimer = 0;
-  private pingTimer = 0;
+  private heartbeatTimer = 0;
   private pongTimer = 0;
   private readyTimer = 0;
   private samples: { rtt: number; off: number }[] = [];
@@ -91,9 +91,13 @@ export class Conn {
   }
 
   send(msg: ClientMsg): boolean {
+    return this.sendText(JSON.stringify(msg));
+  }
+
+  private sendText(text: string): boolean {
     if (this.status !== "open" || !this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
     try {
-      this.ws.send(JSON.stringify(msg));
+      this.ws.send(text);
       return true;
     } catch {
       return false;
@@ -125,7 +129,7 @@ export class Conn {
   private clearTimers() {
     clearTimeout(this.retryTimer);
     clearTimeout(this.openTimer);
-    clearInterval(this.pingTimer);
+    clearInterval(this.heartbeatTimer);
     clearTimeout(this.pongTimer);
     clearTimeout(this.readyTimer);
   }
@@ -161,11 +165,16 @@ export class Conn {
       this.onStatus();
       // A socket that opens but never gets a welcome is treated as dead.
       this.readyTimer = window.setTimeout(() => this.fail(), OPEN_TIMEOUT);
-      // A quick burst of pings gives a good clock estimate, then a steady heartbeat.
+      // A quick burst of pings gives a good clock estimate, then a steady heartbeat, which the
+      // server answers without waking the room.
       [0, 300, 700, 1200].forEach((d) => setTimeout(() => this.ping(0), d));
-      this.pingTimer = window.setInterval(() => this.ping(PONG_TIMEOUT), PING_EVERY);
+      this.heartbeatTimer = window.setInterval(() => this.heartbeat(), HEARTBEAT_EVERY);
     };
     ws.onmessage = (e) => {
+      if (e.data === HEARTBEAT) {
+        clearTimeout(this.pongTimer);
+        return;
+      }
       let m: ServerMsg;
       try {
         m = JSON.parse(typeof e.data === "string" ? e.data : "");
@@ -214,9 +223,20 @@ export class Conn {
     this.attempt++;
     this.status = "retrying";
     this.onStatus();
-    const base = Math.min(8000, 300 * Math.pow(1.6, this.attempt - 1));
+    // Gaps level off at 8s, then ease off so a long outage (or a used-up daily allowance) isn't
+    // hammered by every open tab. A background tab eases off to once a minute, inside the 3-minute
+    // seat hold, and tries again at once when it's shown.
+    const down = Date.now() - this.downSince;
+    const cap = document.visibilityState === "hidden" || down > 10 * 60_000 ? 60_000 : down > 2 * 60_000 ? 30_000 : 8000;
+    const base = Math.min(cap, 300 * Math.pow(1.6, this.attempt - 1));
     const delay = base * (0.8 + Math.random() * 0.4);
     this.retryTimer = window.setTimeout(() => this.open(), delay);
+  }
+
+  private heartbeat() {
+    if (!this.sendText(HEARTBEAT)) return;
+    clearTimeout(this.pongTimer);
+    this.pongTimer = window.setTimeout(() => this.fail(), PONG_TIMEOUT);
   }
 
   private ping(timeout: number) {

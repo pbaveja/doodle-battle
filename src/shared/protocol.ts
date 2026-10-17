@@ -214,9 +214,16 @@ export interface ChatMsg {
 
 /* ---------- messages ---------- */
 
+/**
+ * The steady heartbeat, sent as this exact text. On Cloudflare the platform answers it with the same
+ * text without waking the room. The "ping" message, which carries the server's time, is for clock sync.
+ */
+export const HEARTBEAT = '{"t":"hb"}';
+
 export type ClientMsg =
   | { t: "hello"; v: number; pid: string; secret: string; name: string; color: number; face: number }
   | { t: "ping"; c: number }
+  | { t: "hb" }
   | { t: "profile"; name: string; color: number; face: number }
   | { t: "settings"; s: Partial<Settings> }
   | { t: "start" }
@@ -267,6 +274,7 @@ export type ServerMsg =
   | { t: "chat"; m: ChatMsg }
   | { t: "chatlog"; list: ChatMsg[] }
   | { t: "pong"; c: number; s: number }
+  | { t: "hb" }
   | { t: "err"; code: ErrCode; msg: string }
   | { t: "scored"; id: string; pts: number }
   | ({ t: "drawing" } & GalleryEntry)

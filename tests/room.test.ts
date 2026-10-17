@@ -1,12 +1,18 @@
 // Drives RoomCore directly with a fake clock and fake sockets.
 import { describe, expect, test } from "bun:test";
 import { RoomCore, type RoomIO } from "../src/server/room";
-import { CLOSE, TIMING, type ChatMsg, type ServerMsg, type View } from "../src/shared/protocol";
+import { CLOSE, HEARTBEAT, TIMING, type ChatMsg, type ServerMsg, type View } from "../src/shared/protocol";
 
 class Harness {
   t = 1_000_000;
   timer: number | null = null;
   durable: number | null = null;
+  /** Times the room's timer fired, and wake-ups it asked for that were already in the past. */
+  wakes = 0;
+  pastWakes = 0;
+  /** Connections whose heartbeats the platform answers (they never reach the room), and when it last did. */
+  autoHeartbeat = new Set<string>();
+  heartbeats = new Map<string, number>();
   storage = new Map<string, unknown>();
   inbox = new Map<string, ServerMsg[]>();
   closed = new Map<string, number>();
@@ -31,9 +37,14 @@ class Harness {
         queueMicrotask(() => this.core.onClose(cid));
       },
       bind: () => {},
-      schedule: (at, durable) => { this.timer = at; this.durable = durable; },
+      schedule: (at, durable) => {
+        if ((at !== null && at <= this.t) || (durable !== null && durable <= this.t)) this.pastWakes++;
+        this.timer = at;
+        this.durable = durable;
+      },
       save: (e) => { for (const [k, v] of Object.entries(e)) this.storage.set(k, structuredClone(v)); },
       remove: (keys) => keys.forEach((k) => this.storage.delete(k)),
+      lastHeartbeat: (cid) => this.heartbeats.get(cid) ?? null,
       sendGallery: (cid, turn) => {
         const e = this.storage.get(`gal:${turn}`);
         if (e) this.io().send(cid, JSON.stringify({ t: "drawing", ...(e as object) }));
@@ -54,12 +65,15 @@ class Harness {
         if (this.timer !== null && this.timer <= stepEnd) {
           this.t = Math.max(this.t, this.timer);
           this.timer = null;
+          this.wakes++;
           this.core.onAlarm();
         } else break;
       }
       this.t = stepEnd;
       for (const cid of this.pidOf.keys()) {
-        if (!this.closed.has(cid) && !this.silent.has(cid)) this.core.onMessage(cid, JSON.stringify({ t: "ping", c: this.t }));
+        if (this.closed.has(cid) || this.silent.has(cid)) continue;
+        if (this.autoHeartbeat.has(cid)) this.heartbeats.set(cid, this.t);
+        else this.core.onMessage(cid, JSON.stringify({ t: "ping", c: this.t }));
       }
       this.core.onAlarm();
     }
@@ -502,6 +516,28 @@ describe("stepping away (app in the background)", () => {
     expect(h.chat("c2").some((m) => m.text === "Asha is the host again.")).toBe(true);
   });
 
+  test("a host alone in the lobby can step away without the room waking over and over", () => {
+    const h = lobby(1);
+    h.send("c1", { t: "away" }); // off to another app to share the invite link
+    h.advance(5 * 60_000);
+    expect(h.view("c1").host).toBe(P[0]);
+    expect(h.wakes).toBeLessThan(5);
+    expect(h.pastWakes).toBe(0);
+  });
+
+  test("when everyone leaves the lobby, the room winds down without waking over and over", () => {
+    const h = lobby(3);
+    h.drop("c1");
+    h.advance(20_000);
+    h.drop("c2");
+    h.advance(20_000);
+    h.drop("c3");
+    h.advance(15 * 60_000);
+    expect(h.core.exists()).toBe(false);
+    expect(h.wakes).toBeLessThan(10);
+    expect(h.pastWakes).toBe(0);
+  });
+
   test("during a game the host role never moves for being away", () => {
     const h = lobby(3);
     h.send("c1", { t: "start" });
@@ -549,6 +585,34 @@ describe("stepping away (app in the background)", () => {
     h.advance(TIMING.drawerGraceMs + 100);
     expect(h.view("c1").phase).toBe("reveal");
     expect(h.view("c1").reason).toBe("drawer_left");
+  });
+
+  test("heartbeats answered by the platform keep a quiet connection", () => {
+    const h = lobby(2);
+    h.autoHeartbeat.add("c2");
+    h.advance(100_000);
+    expect(h.view("c1").players.find((p) => p.id === P[1])!.connected).toBe(true);
+  });
+
+  test("a heartbeat that does reach the room is answered", () => {
+    const h = lobby(1);
+    h.core.onMessage("c1", HEARTBEAT);
+    expect(h.msgs("c1").at(-1)).toEqual({ t: "hb" });
+  });
+
+  test("stepping away survives the room waking from hibernation", () => {
+    const h = lobby(3);
+    h.send("c1", { t: "start" });
+    const d = h.drawerCid();
+    h.send(d, { t: "choose", i: 0 });
+    h.send(d, { t: "away" });
+    h.advance(1000);
+    // Hibernation: a fresh core is rebuilt from storage while the sockets stay open.
+    const fresh = new RoomCore(h.io());
+    fresh.restore(h.storage.get("state") as never, h.storage.get("canvas") as never);
+    for (const [cid, pid] of h.pidOf) fresh.rebind(cid, pid);
+    expect(fresh.view(P[0], h.t).players.find((p) => p.id === h.pidOf.get(d))!.away).toBe(true);
+    expect(fresh.turn?.drawerAwaySince).not.toBeNull();
   });
 
   test("a silent connection is dropped so it can't hold up the game", () => {

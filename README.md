@@ -71,21 +71,26 @@ same Wi-Fi, use your computer's local IP instead of `localhost`.
 - **One address.** The same Worker serves the website (`public/`) and the game (`/api`, `/ws`).
   No database, no accounts.
 - **Live drawing.** The drawer sees their own lines instantly. Points go out in batches about
-  every 40 ms on a shared 1200×900 canvas, so every device shows the same picture at its own
-  size. Viewers play strokes back with an ~80 ms buffer so lines flow smoothly.
+  every 100 ms on a shared 1200×900 canvas, so every device shows the same picture at its own
+  size. Viewers spread each batch over the next 100 ms, about a fifth of a second behind the
+  drawer, so lines flow smoothly.
 - **Same countdown everywhere.** The server sends one end time per phase. Each device measures
   its clock offset from the server with pings, so timers match without per-second messages.
-- **Reconnecting.** The client reconnects on its own with growing gaps between tries, pings
-  every 10 s to catch dead mobile connections, and reconnects at once when the phone wakes or
-  the network returns. Every drawing message is numbered, and a gap triggers a full resync.
-  Seats are held for 3 minutes, so a refresh or a dropped connection costs nothing.
+- **Reconnecting.** The client reconnects on its own with growing gaps between tries (up to 8 s,
+  easing off to 30 s after two minutes and a minute after ten, or in a background tab), sends a
+  heartbeat every 10 s to catch dead mobile connections, and reconnects at once when the phone
+  wakes or the network returns. Cloudflare answers the heartbeat itself, without waking the room.
+  Every drawing message is numbered, and a gap triggers a full resync. Seats are held for
+  3 minutes, so a refresh or a dropped connection costs nothing.
 - **Stepping away.** When the page goes to the background (switching apps on a phone), the client
   tells the room. You show as "Away" with a moon, keep your seat and score, and your drawing turn is
   skipped if it comes up. The host role never moves during a game; in the lobby it passes only after
   the host has been away for a minute, and the room's creator gets it back on return. Connections that
   go silent for 90 s are dropped so a frozen phone can't hold up a turn.
 - **Survives restarts.** Room state is saved to the Durable Object's storage. After a deploy or
-  restart, devices reconnect and the turn carries on.
+  restart, devices reconnect and the turn carries on. Short waits run on in-memory timers, each
+  backed by a durable alarm a few seconds later that only fires if the room restarted in between.
+  Waits over 90 s use the alarm alone.
 
 ## Words and guessing
 
@@ -146,10 +151,13 @@ each player earned and slides everyone into their new position.
 
 ## Free tier
 
-Cloudflare's free plan allows 100,000 Durable Object requests and 13,000 GB-seconds a day.
-Messages sent out to players are free and incoming ones count 20 to a request, which works out
-to roughly 40 full 8-player games a day (more for smaller groups). Limits reset at 00:00 UTC.
-The $5/month Workers Paid plan removes this ceiling if you ever need it.
+Cloudflare's free plan allows, each day, 100,000 Durable Object requests, 13,000 GB-seconds of
+room time and 100,000 rows written to storage. Messages sent out to players are free, incoming ones
+count 20 to a request, and heartbeats are answered without waking the room, so a full 8-player game
+uses roughly 500 requests. Room time runs out first: a room stays awake for the whole game, which
+works out to roughly 50 full 8-player games a day (more for shorter games). A quiet lobby sleeps
+between messages. Limits reset at 00:00 UTC. The $5/month Workers Paid plan removes this
+ceiling if you ever need it.
 
 ## Project layout
 
