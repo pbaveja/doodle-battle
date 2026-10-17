@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "doodle-battle",
+  "main": "src/server/worker.ts",
+  "compatibility_date": "2025-10-01",
+  // The website (public/) and the game server are one Worker. Only /api and /ws reach the code;
+  // everything else is served as static files, with /r/<code> falling back to index.html.
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/ws/*"]
+  },
+  // One Durable Object per room: it holds the word, the timers and the scores.
+  "durable_objects": {
+    "bindings": [{ "name": "ROOMS", "class_name": "Room" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }],
+  "observability": { "enabled": true },
+  // A separate copy for trying changes first: `npm run preview` deploys it to
+  // https://doodle-battle-preview.<your-subdomain>.workers.dev with its own rooms.
+  // (Cloudflare's built-in version previews don't work for Workers with Durable Objects.)
+  "env": {
+    "preview": {
+      "name": "doodle-battle-preview",
+      "durable_objects": {
+        "bindings": [{ "name": "ROOMS", "class_name": "Room" }]
+      }
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "doodle-battle",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Real-time multiplayer drawing and guessing game for laptop, iPad and phone.",
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/client/main.ts --bundle --minify --sourcemap --format=esm --target=es2020,safari15 --outfile=public/assets/app.js",
+    "dev": "npm run build && wrangler dev",
+    "deploy": "npm run build && wrangler deploy",
+    "ship": "npm install && npm run deploy",
+    "typecheck": "tsc -p tsconfig.json",
+    "logs": "wrangler tail",
+    "preview": "npm run build && wrangler deploy --env preview"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0",
+    "typescript": "^6.0.3",
+    "wrangler": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

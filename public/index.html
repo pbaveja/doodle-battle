@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<title>Doodle Battle</title>
+<meta name="description" content="Draw, guess and battle your friends in real time. Free multiplayer Pictionary for laptop, iPad and phone.">
+<meta name="theme-color" content="#e3e7ee" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#11141b" media="(prefers-color-scheme: dark)">
+<meta property="og:title" content="Doodle Battle">
+<meta property="og:description" content="Draw, guess and battle your friends in real time.">
+<script>
+  // www.doodlebattle.in → doodlebattle.in, so everyone shares one address (and one saved profile).
+  if (location.hostname.indexOf("www.") === 0) location.replace(location.href.replace("//www.", "//"));
+</script>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@500&family=Figtree:wght@400;500;600;700;800&family=Shantell+Sans:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="/styles.css">
+<script type="module" src="/assets/app.js"></script>
+</head>
+<body>
+<div id="app">
+
+  <!-- Connection banner -->
+  <div class="netbar" id="netbar" role="status" aria-live="polite" hidden>
+    <span class="netdot" aria-hidden="true"></span>
+    <span id="netText">Reconnecting…</span>
+    <button class="netbtn" id="netRetry" type="button">Retry now</button>
+  </div>
+
+  <!-- HOME -->
+  <main class="screen home" id="home" hidden>
+    <section class="hero">
+      <figure class="paper doodle" aria-hidden="true">
+        <svg viewBox="0 0 320 190">
+          <g transform="translate(160 112) rotate(-34)">
+            <path class="ink blue" pathLength="1" style="--d:.05s" d="M-96 -12 H66 L98 0 L66 12 H-96 Z"/>
+            <path class="ink blue" pathLength="1" style="--d:.5s" d="M66 -12 V12 M-84 -12 V12 M-96 -12 H-105 Q-114 -12 -114 0 Q-114 12 -105 12 H-96"/>
+            <path class="lead" style="--d:.7s" d="M86 -4.5 L98 0 L86 4.5 Z" fill="var(--m-blue)"/>
+          </g>
+          <g transform="translate(160 112) rotate(-146)">
+            <path class="ink red" pathLength="1" style="--d:.35s" d="M-96 -12 H66 L98 0 L66 12 H-96 Z"/>
+            <path class="ink red" pathLength="1" style="--d:.8s" d="M66 -12 V12 M-84 -12 V12 M-96 -12 H-105 Q-114 -12 -114 0 Q-114 12 -105 12 H-96"/>
+            <path class="lead" style="--d:1s" d="M86 -4.5 L98 0 L86 4.5 Z" fill="var(--m-red)"/>
+          </g>
+          <path class="ink gold" pathLength="1" style="--d:1.15s" d="M160 30 V12 M138 38 L126 24 M182 38 L194 24"/>
+          <path class="ink gold" pathLength="1" style="--d:1.3s" d="M60 178 C110 168 210 184 262 172"/>
+        </svg>
+      </figure>
+      <div class="hero-copy">
+        <h1 class="title" tabindex="-1" data-focus>Doodle Battle</h1>
+        <p class="tag">Draw, guess and battle your friends in real time. Up to 12 players, on any laptop, iPad or phone.</p>
+        <ul class="howto">
+          <li><span class="step">1</span><span>Create a room and share the link.</span></li>
+          <li><span class="step">2</span><span>Take turns drawing a secret word while everyone races to guess it in the chat.</span></li>
+          <li><span class="step">3</span><span>Guess first to score the most. The best artist-detective takes the podium.</span></li>
+        </ul>
+      </div>
+    </section>
+    <section class="panel start" aria-labelledby="startTitle">
+      <h2 class="h2" id="startTitle">Who's playing?</h2>
+      <div class="profile-slot" id="homeProfile"></div>
+      <button class="btn primary big" id="createBtn" type="button">Create a room</button>
+      <p class="formerr" id="createErr" role="alert" hidden></p>
+      <div class="or"><span>or join a friend</span></div>
+      <form class="joinrow" id="joinForm" autocomplete="off">
+        <label class="sr" for="codeInput">Room code</label>
+        <input class="code-in" id="codeInput" inputmode="text" autocapitalize="characters" spellcheck="false" maxlength="5" placeholder="Room code" aria-describedby="joinErr">
+        <button class="btn secondary" type="submit" id="joinBtn">Join</button>
+      </form>
+      <p class="formerr" id="joinErr" role="alert" hidden></p>
+      <div class="or"><span>or warm up on your own</span></div>
+      <a class="btn secondary" id="practiceBtn" href="/practice" data-nav>
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+        Practice drawing
+      </a>
+    </section>
+  </main>
+
+  <!-- PRACTICE SETUP -->
+  <main class="screen pscreen" id="practice" hidden>
+    <header class="topbar">
+      <a class="brand" href="/" data-nav aria-label="Doodle Battle home">Doodle Battle</a>
+      <div class="topbar-actions">
+        <button class="iconbtn" type="button" data-sound aria-label="Sound on"></button>
+      </div>
+    </header>
+    <section class="panel psetup" aria-labelledby="pTitle">
+      <div class="phead">
+        <p class="eyebrow">Solo practice</p>
+        <h1 class="h2" id="pTitle" tabindex="-1" data-focus>Practice drawing</h1>
+        <p class="lede">Pick a word, draw it against the clock, and keep your sketches. No guessers, no pressure.</p>
+      </div>
+      <div class="settings" id="pSettings">
+        <div class="setting wide">
+          <label class="label" for="pCategory">Category</label>
+          <div class="selectwrap"><select id="pCategory"></select></div>
+        </div>
+        <div class="setting wide">
+          <span class="label" id="lpDiff">Difficulty</span>
+          <div class="seg" id="pDiff" role="radiogroup" aria-labelledby="lpDiff">
+            <button type="button" role="radio" data-v="easy">Easy</button>
+            <button type="button" role="radio" data-v="medium">Medium</button>
+            <button type="button" role="radio" data-v="hard">Hard</button>
+            <button type="button" role="radio" data-v="mixed">Mixed</button>
+          </div>
+        </div>
+        <div class="setting">
+          <span class="label" id="lpTime">Draw time</span>
+          <div class="stepper" data-key="drawTime" role="group" aria-labelledby="lpTime">
+            <button type="button" class="stepbtn" data-d="-1" aria-label="Less time">−</button>
+            <output class="stepval" data-val>80s</output>
+            <button type="button" class="stepbtn" data-d="1" aria-label="More time">+</button>
+          </div>
+        </div>
+        <div class="setting">
+          <span class="label" id="lpWords">Words</span>
+          <div class="stepper" data-key="words" role="group" aria-labelledby="lpWords">
+            <button type="button" class="stepbtn" data-d="-1" aria-label="Fewer words">−</button>
+            <output class="stepval" data-val>5</output>
+            <button type="button" class="stepbtn" data-d="1" aria-label="More words">+</button>
+          </div>
+        </div>
+      </div>
+      <div class="pstart">
+        <button class="btn primary big" id="pStart" type="button">Start drawing</button>
+        <p class="formerr" id="pErr" role="alert" hidden></p>
+        <a class="textlink" href="/" data-nav>Back to home</a>
+      </div>
+    </section>
+  </main>
+
+  <!-- PRACTICE SUMMARY -->
+  <main class="screen pover" id="practiceDone" hidden>
+    <header class="topbar">
+      <a class="brand" href="/" data-nav aria-label="Doodle Battle home">Doodle Battle</a>
+      <div class="topbar-actions">
+        <button class="iconbtn" type="button" data-sound aria-label="Sound on"></button>
+      </div>
+    </header>
+    <section class="celebrate pover-head" aria-labelledby="pdTitle">
+      <p class="eyebrow">Practice done</p>
+      <h2 class="h1" id="pdTitle" tabindex="-1" data-focus>Nice work!</h2>
+      <p class="lede" id="pdStats"></p>
+      <div class="pover-actions">
+        <button class="btn primary big" id="pdAgain" type="button">Practice again</button>
+        <button class="btn secondary big" id="pdSettings" type="button">Change settings</button>
+      </div>
+      <a class="textlink" href="/" data-nav>Back to home</a>
+    </section>
+    <section class="pover-book" aria-label="Your drawings">
+      <div class="gallery" id="pdGallery"></div>
+    </section>
+  </main>
+
+  <!-- JOIN BY LINK -->
+  <main class="screen join" id="join" hidden>
+    <section class="panel start">
+      <div class="ticket">
+        <p class="eyebrow">You're invited to room</p>
+        <p class="bigcode" id="joinCode">ABCDE</p>
+        <p class="hint" id="joinInfo">Checking the room…</p>
+      </div>
+      <div class="profile-slot" id="joinProfile"></div>
+      <button class="btn primary big" id="joinGo" type="button" tabindex="-1" data-focus>Join the game</button>
+      <p class="formerr" id="joinGoErr" role="alert" hidden></p>
+      <a class="textlink" href="/" data-nav>Back to home</a>
+    </section>
+  </main>
+
+  <!-- MESSAGE (room missing, kicked, replaced...) -->
+  <main class="screen notice" id="notice" hidden>
+    <section class="panel start">
+      <h2 class="h2" id="noticeTitle" tabindex="-1" data-focus>Room not found</h2>
+      <p class="lede" id="noticeText">Check the code, or create a new room.</p>
+      <div class="actions" id="noticeActions"></div>
+    </section>
+  </main>
+
+  <!-- CONNECTING -->
+  <main class="screen connecting" id="connecting" hidden>
+    <div class="spinner" aria-hidden="true"></div>
+    <p class="lede" id="connectingText" tabindex="-1" data-focus>Joining room…</p>
+    <button class="btn secondary" id="connectingCancel" type="button">Cancel</button>
+  </main>
+
+  <!-- LOBBY -->
+  <main class="screen lobby" id="lobby" hidden>
+    <header class="topbar">
+      <a class="brand" href="/" data-leave aria-label="Doodle Battle home">Doodle Battle</a>
+      <div class="topbar-actions">
+        <button class="iconbtn" type="button" data-sound aria-label="Sound on"></button>
+        <button class="btn ghost small" type="button" id="lobbyLeave">Leave</button>
+      </div>
+    </header>
+    <div class="lobby-grid">
+      <section class="panel lobby-room" aria-labelledby="lobbyTitle">
+        <div class="ticket inline">
+          <p class="eyebrow" id="lobbyTitle">Room code</p>
+          <p class="bigcode" id="lobbyCode" tabindex="-1" data-focus>ABCDE</p>
+        </div>
+        <div class="invite">
+          <button class="btn primary" type="button" id="copyLink">Copy invite link</button>
+          <input class="copyfallback" id="copyFallback" readonly hidden aria-label="Invite link">
+        </div>
+        <div class="listhead">
+          <h2 class="h3">Players</h2>
+          <span class="count" id="lobbyCount">1 of 8</span>
+        </div>
+        <ul class="plist lobby-players" id="lobbyPlayers"></ul>
+        <details class="me-edit" id="meEdit">
+          <summary>Change your name or look</summary>
+          <div class="profile-slot" id="lobbyProfile"></div>
+          <button class="btn secondary small" type="button" id="profileSave">Save changes</button>
+        </details>
+      </section>
+
+      <section class="panel lobby-settings" aria-labelledby="setTitle">
+        <div class="listhead">
+          <h2 class="h3" id="setTitle">Game settings</h2>
+          <span class="hostnote" id="hostNote"></span>
+        </div>
+        <div class="settings" id="settings">
+          <div class="setting">
+            <span class="label" id="lRounds">Rounds</span>
+            <div class="stepper" data-key="rounds" role="group" aria-labelledby="lRounds">
+              <button type="button" class="stepbtn" data-d="-1" aria-label="Fewer rounds">−</button>
+              <output class="stepval" data-val>3</output>
+              <button type="button" class="stepbtn" data-d="1" aria-label="More rounds">+</button>
+            </div>
+          </div>
+          <div class="setting">
+            <span class="label" id="lTime">Draw time</span>
+            <div class="stepper" data-key="drawTime" role="group" aria-labelledby="lTime">
+              <button type="button" class="stepbtn" data-d="-1" aria-label="Less time">−</button>
+              <output class="stepval" data-val>80s</output>
+              <button type="button" class="stepbtn" data-d="1" aria-label="More time">+</button>
+            </div>
+          </div>
+          <div class="setting">
+            <span class="label" id="lMax">Max players</span>
+            <div class="stepper" data-key="maxPlayers" role="group" aria-labelledby="lMax">
+              <button type="button" class="stepbtn" data-d="-1" aria-label="Fewer players">−</button>
+              <output class="stepval" data-val>8</output>
+              <button type="button" class="stepbtn" data-d="1" aria-label="More players">+</button>
+            </div>
+          </div>
+          <div class="setting">
+            <span class="label" id="lHints">Letter hints</span>
+            <div class="stepper" data-key="hints" role="group" aria-labelledby="lHints">
+              <button type="button" class="stepbtn" data-d="-1" aria-label="Fewer hints">−</button>
+              <output class="stepval" data-val>2</output>
+              <button type="button" class="stepbtn" data-d="1" aria-label="More hints">+</button>
+            </div>
+          </div>
+          <div class="setting wide">
+            <span class="label" id="lDiff">Difficulty</span>
+            <div class="seg" id="diffSeg" role="radiogroup" aria-labelledby="lDiff">
+              <button type="button" role="radio" data-v="easy">Easy</button>
+              <button type="button" role="radio" data-v="medium">Medium</button>
+              <button type="button" role="radio" data-v="hard">Hard</button>
+              <button type="button" role="radio" data-v="mixed">Mixed</button>
+            </div>
+          </div>
+          <div class="setting wide">
+            <label class="label" for="categorySel">Category</label>
+            <div class="selectwrap"><select id="categorySel"></select></div>
+          </div>
+          <div class="setting wide">
+            <label class="check"><input type="checkbox" id="photosOn"> <span>Player photos <span class="opt">Players can use a photo of themselves</span></span></label>
+          </div>
+          <div class="setting wide">
+            <label class="label" for="customWords">Your own words <span class="opt">optional, separated by commas</span></label>
+            <textarea id="customWords" rows="3" maxlength="4000" placeholder="office party, our dog Max, beach trip"></textarea>
+            <label class="check"><input type="checkbox" id="customOnly"> <span>Use only my words <span class="opt" id="customHint">(needs at least 10)</span></span></label>
+          </div>
+        </div>
+        <div class="startbox">
+          <button class="btn primary big" type="button" id="startBtn">Start game</button>
+          <p class="hint" id="startHint">Waiting for at least one more player.</p>
+        </div>
+      </section>
+
+      <section class="panel lobby-chat chat-slot" id="lobbyChat" aria-label="Chat"></section>
+    </div>
+  </main>
+
+  <!-- GAME -->
+  <main class="screen game" id="game" hidden>
+    <header class="gbar">
+      <div class="gbar-left">
+        <span class="roundlabel" id="roundLabel">Round 1 of 3</span>
+      </div>
+      <div class="wordbox" id="wordBox" aria-live="polite"></div>
+      <div class="gbar-right">
+        <button class="btn secondary small pshuffle practice-only" id="pShuffle" type="button" hidden>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3h5v5"/><path d="M4 20 21 3"/><path d="M21 16v5h-5"/><path d="m15 15 6 6"/><path d="M4 4l5 5"/></svg>
+          <span>New words</span>
+        </button>
+        <button class="btn primary small pdone practice-only" id="pDone" type="button" hidden>Done</button>
+        <div class="clock" id="clock" role="timer" aria-label="Time left">
+          <svg class="hg" viewBox="0 0 28 40" width="22" height="31" aria-hidden="true">
+            <defs><clipPath id="hgClip"><path d="M6 5 C6 14 12.6 17 12.6 20 C12.6 23 6 26 6 35 L22 35 C22 26 15.4 23 15.4 20 C15.4 17 22 14 22 5 Z"/></clipPath></defs>
+            <g clip-path="url(#hgClip)">
+              <rect id="hgTop" class="hg-sand" x="0" y="8" width="28" height="12"/>
+              <rect id="hgBot" class="hg-sand" x="0" y="35" width="28" height="0"/>
+              <rect id="hgStream" class="hg-sand" x="13.3" y="20" width="1.4" height="15"/>
+            </g>
+            <path class="hg-glass" d="M6 5 C6 14 12.6 17 12.6 20 C12.6 23 6 26 6 35 L22 35 C22 26 15.4 23 15.4 20 C15.4 17 22 14 22 5 Z"/>
+            <rect class="hg-cap" x="3" y="2" width="22" height="3" rx="1.5"/>
+            <rect class="hg-cap" x="3" y="35" width="22" height="3" rx="1.5"/>
+          </svg>
+          <span id="clockText">80</span>
+        </div>
+        <div class="menuwrap">
+          <button class="iconbtn" type="button" id="menuBtn" aria-haspopup="true" aria-expanded="false" aria-label="Game menu">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="5" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="19" r="2" fill="currentColor"/></svg>
+          </button>
+          <div class="menu" id="menu" hidden>
+            <p class="menu-code room-only">Room <b id="menuCode">ABCDE</b></p>
+            <p class="menu-code practice-only">Practice</p>
+            <button type="button" class="menuitem room-only" id="menuInvite">Copy invite link</button>
+            <button type="button" class="menuitem" id="menuSound" data-sound-text>Sound: on</button>
+            <button type="button" class="menuitem room-only danger" id="menuSkip" hidden>End my turn</button>
+            <button type="button" class="menuitem room-only danger" id="menuEnd" hidden>End game for everyone</button>
+            <div class="menukick room-only" id="menuKick" hidden></div>
+            <button type="button" class="menuitem room-only danger" id="menuLeave">Leave room</button>
+            <button type="button" class="menuitem practice-only danger" id="menuPEnd">End practice</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <aside class="players-col" aria-label="Players">
+      <ol class="plist game-players" id="gamePlayers"></ol>
+    </aside>
+
+    <section class="stage" id="stage">
+      <div class="boardarea">
+        <div class="paperwrap" id="paperWrap">
+          <canvas id="board" aria-label="Drawing canvas"></canvas>
+          <div class="cursor" id="cursor" hidden></div>
+          <div class="overlay" id="overlay" hidden></div>
+          <div class="awaychip" id="awayChip" hidden></div>
+        </div>
+      </div>
+      <div class="tools" id="tools" hidden>
+        <div class="toolrow">
+          <div class="toolgroup" role="group" aria-label="Tool">
+            <button class="tool" type="button" data-tool="brush" aria-label="Brush (B)" title="Brush (B)">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18.4 2.6a2 2 0 0 1 2.9 2.9L11 15.8 8.2 13Z"/><path d="M7 14.5c-2 0-3.5 1.5-3.5 3.5 0 1.2-.6 2-1.5 2.5 3.5 1 7.5-.5 7.5-3.5"/></svg>
+            </button>
+            <button class="tool" type="button" data-tool="fill" aria-label="Fill (F)" title="Fill (F)">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m19 11-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2a2 2 0 0 0 2.8 0L19 11Z"/><path d="m5 2 5 5"/><path d="M2 13h15"/><path d="M22 20a2 2 0 1 1-4 0c0-1.6 1.7-2.4 2-4 .3 1.6 2 2.4 2 4Z"/></svg>
+            </button>
+            <button class="tool" type="button" data-tool="eraser" aria-label="Eraser (E)" title="Eraser (E)">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h12"/><path d="M4.6 14.4 13.4 5.6a2 2 0 0 1 2.8 0l3.2 3.2a2 2 0 0 1 0 2.8L11 20H8.2l-3.6-3.6a1.4 1.4 0 0 1 0-2Z"/><path d="m9 10 5 5"/></svg>
+            </button>
+          </div>
+          <div class="toolgroup sizes" role="group" aria-label="Brush size">
+            <button class="tool" type="button" data-size="0" aria-label="Thin (1)" title="Thin (1)"><span class="dot" style="--s:5px"></span></button>
+            <button class="tool" type="button" data-size="1" aria-label="Medium (2)" title="Medium (2)"><span class="dot" style="--s:9px"></span></button>
+            <button class="tool" type="button" data-size="2" aria-label="Thick (3)" title="Thick (3)"><span class="dot" style="--s:15px"></span></button>
+            <button class="tool" type="button" data-size="3" aria-label="Extra thick (4)" title="Extra thick (4)"><span class="dot" style="--s:22px"></span></button>
+          </div>
+          <div class="toolgroup" role="group" aria-label="Edit">
+            <button class="tool" type="button" id="undoBtn" aria-label="Undo (Ctrl+Z)" title="Undo (Ctrl+Z)">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+            </button>
+            <button class="tool wide" type="button" id="clearBtn" aria-label="Clear the whole drawing" title="Clear the whole drawing (undo brings it back)">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/></svg>
+              <span class="tlabel">Clear</span>
+            </button>
+          </div>
+        </div>
+        <div class="palette" id="palette" role="group" aria-label="Colours"></div>
+      </div>
+    </section>
+
+    <aside class="chat-col chat-slot" id="gameChat" aria-label="Guesses and chat"></aside>
+  </main>
+
+  <!-- GAME OVER -->
+  <main class="screen over" id="over" hidden>
+    <header class="topbar">
+      <span class="brand">Doodle Battle</span>
+      <div class="topbar-actions">
+        <button class="iconbtn" type="button" data-sound aria-label="Sound on"></button>
+      </div>
+    </header>
+    <section class="celebrate" id="celebrate" aria-labelledby="overTitle">
+      <p class="eyebrow">Final scores</p>
+      <h2 class="h1" id="overTitle" tabindex="-1" data-focus>Asha wins!</h2>
+      <div class="podium-slot" id="podium"></div>
+    </section>
+    <section class="overgrid">
+      <div class="panel ranking">
+        <h3 class="h3">Leaderboard</h3>
+        <ol class="ranklist" id="rankList"></ol>
+        <div class="overactions">
+          <button class="btn primary big" type="button" id="againBtn">Play again</button>
+          <p class="hint" id="againHint" hidden>Waiting for the host to start a new game.</p>
+          <button class="btn ghost" type="button" id="overLeave">Leave room</button>
+        </div>
+      </div>
+      <div class="sketchbook">
+        <h3 class="h3">The sketchbook</h3>
+        <div class="gallery" id="gallery"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Chat component (moved between the lobby and the game) -->
+  <div class="chat" id="chat" hidden>
+    <div class="chatlog" id="chatLog" role="log" aria-live="polite" aria-label="Chat messages"></div>
+    <button class="newmsgs" id="newMsgs" type="button" hidden>New messages</button>
+    <form class="chatform" id="chatForm" autocomplete="off">
+      <label class="sr" for="chatInput">Message</label>
+      <input id="chatInput" maxlength="100" enterkeyhint="send" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Say something">
+      <button class="sendbtn" type="submit" aria-label="Send">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+      </button>
+    </form>
+  </div>
+
+  <!-- Profile editor component (moved between screens) -->
+  <div class="profile" id="profile" hidden>
+    <div class="avatar-pick">
+      <button class="iconbtn" type="button" id="faceP" aria-label="Previous character">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+      </button>
+      <div class="avatar-wrap">
+        <button class="avatar-big" type="button" id="faceShuffle" aria-label="Change your look" aria-haspopup="dialog"></button>
+        <button class="cam-badge" type="button" id="photoBtn" aria-label="Take a photo" aria-haspopup="dialog"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
+      </div>
+      <button class="iconbtn" type="button" id="faceN" aria-label="Next character">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+      </button>
+    </div>
+    <p class="look-name" id="lookName" aria-live="polite">Cat</p>
+    <label class="sr" for="nameInput">Your name</label>
+    <input class="name-in" id="nameInput" maxlength="16" autocomplete="nickname" autocapitalize="words" spellcheck="false" placeholder="Your name">
+    <div class="inks" id="inks" role="radiogroup" aria-label="Your colour"></div>
+  </div>
+
+  <!-- Look picker: characters and your photo -->
+  <div class="sheet-back" id="lookSheet" hidden>
+    <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="lookTitle">
+      <header class="sheet-head">
+        <h2 class="h3" id="lookTitle">Pick your look</h2>
+        <button class="btn ghost small" type="button" id="lookShuffle">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3h5v5"/><path d="M4 20 21 3"/><path d="M21 16v5h-5"/><path d="m15 15 6 6"/><path d="M4 4l5 5"/></svg>
+          Surprise me
+        </button>
+        <button class="iconbtn" type="button" id="lookClose" aria-label="Close">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </header>
+      <div class="sheet-body" id="lookBody"></div>
+    </section>
+  </div>
+
+  <!-- Camera -->
+  <div class="sheet-back" id="camSheet" hidden>
+    <section class="sheet camsheet" role="dialog" aria-modal="true" aria-labelledby="camTitle">
+      <header class="sheet-head">
+        <h2 class="h3" id="camTitle">Take a photo</h2>
+        <button class="iconbtn" type="button" id="camClose" aria-label="Close">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </header>
+      <div class="cam-body">
+        <div class="cam-ring" id="camRing">
+          <video id="camVideo" playsinline muted autoplay></video>
+          <img id="camShot" alt="" hidden>
+          <div class="cam-count" id="camCount" aria-live="assertive" hidden></div>
+        </div>
+        <p class="hint cam-msg" id="camMsg" role="status">Starting the camera…</p>
+        <div class="cam-looks" id="camLooks" role="radiogroup" aria-label="Look" hidden></div>
+        <div class="cam-actions" id="camLive">
+          <button class="btn primary big" type="button" id="camShoot" disabled><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Take photo</button>
+        </div>
+        <div class="cam-actions" id="camReview" hidden>
+          <button class="btn primary big" type="button" id="camUse">Use photo</button>
+          <button class="btn secondary" type="button" id="camRetake">Retake</button>
+          <button class="btn ghost" type="button" id="camChar">Use a character instead</button>
+        </div>
+        <div class="cam-actions" id="camFail" hidden>
+          <button class="btn primary" type="button" id="camRetry">Try again</button>
+          <button class="btn ghost" type="button" id="camChar2">Use a character instead</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+</div>
+</body>
+</html>

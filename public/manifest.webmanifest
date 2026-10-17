@@ -1,0 +1,9 @@
+{
+  "name": "Doodle Battle",
+  "short_name": "Doodle Battle",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#e3e7ee",
+  "theme_color": "#2a43cf",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
