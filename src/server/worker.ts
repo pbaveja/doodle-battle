@@ -1,6 +1,6 @@
 // Cloudflare entry point: routes HTTP requests and hosts one Durable Object per room.
 
-import { CLOSE, CODE_RE } from "../shared/protocol";
+import { CLOSE, CODE_RE, HEARTBEAT } from "../shared/protocol";
 import { randomCode } from "../shared/rules";
 import { RoomCore, type RoomIO, type StoredPhoto } from "./room";
 import { wordsResponse } from "./words-api";
@@ -17,6 +17,15 @@ const json = (data: unknown, status = 200) =>
   });
 
 const roomStub = (env: Env, code: string) => env.ROOMS.get(env.ROOMS.idFromName(code));
+
+/** Waits up to this long use an in-memory timer; longer ones rely on the alarm alone. */
+const TIMER_MAX_MS = 90_000;
+/**
+ * When the in-memory timer covers a wake-up, the alarm is only a backup in case the room restarts.
+ * It's set this much later, so the free timer gets there first and moves the alarm on before it
+ * fires: every alarm that runs is a billed request.
+ */
+const ALARM_BACKUP_MS = 3000;
 
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
@@ -74,6 +83,8 @@ export class Room {
   private alarmAt: number | null = null;
 
   constructor(private ctx: DurableObjectState, _env: Env) {
+    // Heartbeats are answered by the platform without waking (or billing time to) the room.
+    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(HEARTBEAT, HEARTBEAT));
     void ctx.blockConcurrencyWhile(async () => {
       this.core = new RoomCore(this.io());
       const saved = await ctx.storage.get<unknown>(["state", "canvas"]);
@@ -123,22 +134,33 @@ export class Room {
         if (at !== null) {
           const delay = Math.max(0, at - Date.now()) + 5;
           // Short waits use an in-memory timer for precision; the alarm below survives restarts.
-          if (delay <= 90_000) {
+          if (delay <= TIMER_MAX_MS) {
             this.timer = setTimeout(() => {
               this.timer = null;
               this.core.onAlarm();
             }, delay);
           }
         }
-        if (durable !== this.alarmAt) {
-          this.alarmAt = durable;
-          if (durable === null) void this.ctx.storage.deleteAlarm();
-          else void this.ctx.storage.setAlarm(durable);
+        const covered = durable !== null && durable - Date.now() + 5 <= TIMER_MAX_MS;
+        const alarm = covered ? durable + ALARM_BACKUP_MS : durable;
+        if (alarm !== this.alarmAt) {
+          this.alarmAt = alarm;
+          if (alarm === null) void this.ctx.storage.deleteAlarm();
+          else void this.ctx.storage.setAlarm(alarm);
         }
       },
       save: (entries) => void this.ctx.storage.put(entries),
       remove: (keys) => {
         for (let i = 0; i < keys.length; i += 100) void this.ctx.storage.delete(keys.slice(i, i + 100));
+      },
+      lastHeartbeat: (cid) => {
+        const ws = this.sockets.get(cid);
+        if (!ws) return null;
+        try {
+          return this.ctx.getWebSocketAutoResponseTimestamp(ws)?.getTime() ?? null;
+        } catch {
+          return null; // socket is closing
+        }
       },
       sendGallery: (cid, turn) => {
         void this.ctx.storage.get(`gal:${turn}`).then((entry) => {

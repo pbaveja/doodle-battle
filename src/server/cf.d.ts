@@ -33,6 +33,12 @@ interface DurableObjectState {
   blockConcurrencyWhile<T>(fn: () => Promise<T>): Promise<T>;
   acceptWebSocket(ws: WebSocket, tags?: string[]): void;
   getWebSockets(tag?: string): CfWebSocket[];
+  setWebSocketAutoResponse(pair?: WebSocketRequestResponsePair): void;
+  getWebSocketAutoResponseTimestamp(ws: WebSocket): Date | null;
+}
+
+declare class WebSocketRequestResponsePair {
+  constructor(request: string, response: string);
 }
 
 interface Fetcher {

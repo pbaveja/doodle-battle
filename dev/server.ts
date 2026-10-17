@@ -1,7 +1,7 @@
 // Local stand-in for Cloudflare: serves ./public and runs the same RoomCore in memory.
 // Run: bun dev/server.ts   (PORT=8787, LAG=<ms> adds latency, FAST=1 shortens timers)
 
-import { CODE_RE, TIMING, type Timing } from "../src/shared/protocol";
+import { CODE_RE, HEARTBEAT, TIMING, type Timing } from "../src/shared/protocol";
 import { randomCode } from "../src/shared/rules";
 import { RoomCore, type RoomIO, type StoredPhoto } from "../src/server/room";
 import { wordsResponse } from "../src/server/words-api";
@@ -23,6 +23,8 @@ interface DevRoom {
   sockets: Map<string, WS>;
   storage: Map<string, unknown>;
   timer: ReturnType<typeof setTimeout> | null;
+  /** When each connection's heartbeat was last answered (Cloudflare's auto-response timestamp). */
+  heartbeats: Map<string, number>;
 }
 
 const rooms = new Map<string, DevRoom>();
@@ -35,7 +37,7 @@ const later2 = (res: Response) => (LAG > 0 ? new Promise<Response>((r) => setTim
 function getRoom(code: string): DevRoom {
   let r = rooms.get(code);
   if (r) return r;
-  const room: DevRoom = { core: null as unknown as RoomCore, sockets: new Map(), storage: new Map(), timer: null };
+  const room: DevRoom = { core: null as unknown as RoomCore, sockets: new Map(), storage: new Map(), timer: null, heartbeats: new Map() };
   const io: RoomIO = {
     send: (cid, data) => {
       const ws = room.sockets.get(cid);
@@ -54,6 +56,7 @@ function getRoom(code: string): DevRoom {
       room.timer = null;
       if (at !== null) room.timer = setTimeout(() => { room.timer = null; room.core.onAlarm(); }, Math.max(0, at - Date.now()) + 5);
     },
+    lastHeartbeat: (cid) => room.heartbeats.get(cid) ?? null,
     save: (entries) => { for (const [k, v] of Object.entries(entries)) room.storage.set(k, structuredClone(v)); },
     remove: (keys) => { for (const k of keys) room.storage.delete(k); },
     sendGallery: (cid, turn) => {
@@ -81,6 +84,7 @@ function restartRoom(code: string) {
   const fresh = getRoom(code);
   fresh.storage = old.storage;
   fresh.sockets = old.sockets;
+  fresh.heartbeats = old.heartbeats;
   const photos = new Map<string, StoredPhoto>();
   for (const [k, v] of old.storage) if (k.startsWith("photo:")) photos.set(k.slice(6), v as StoredPhoto);
   fresh.core.restore(old.storage.get("state") as never, old.storage.get("canvas") as never, photos);
@@ -166,6 +170,14 @@ const server = Bun.serve<{ code: string; cid: string; pid?: string }, never>({
       if (!room) return;
       const text = typeof msg === "string" ? msg : null;
       if (frozen.has(ws.data.pid ?? "")) return;
+      if (text === HEARTBEAT) {
+        // Answered here without reaching the room, like Cloudflare's auto-response.
+        later(() => {
+          room.heartbeats.set(ws.data.cid, Date.now());
+          later(() => { try { ws.send(HEARTBEAT); } catch { /* closed */ } });
+        });
+        return;
+      }
       if (text && text.includes('"t":"hello"')) {
         try { ws.data.pid = JSON.parse(text).pid; } catch { /* ignore */ }
       }
@@ -175,6 +187,7 @@ const server = Bun.serve<{ code: string; cid: string; pid?: string }, never>({
       const room = rooms.get(ws.data.code);
       if (!room) return;
       if (room.sockets.get(ws.data.cid) === ws) room.sockets.delete(ws.data.cid);
+      room.heartbeats.delete(ws.data.cid);
       later(() => room.core.onClose(ws.data.cid));
     },
   },
