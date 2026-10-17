@@ -179,6 +179,6 @@ describe("Durable Object wrapper", () => {
     expect(wl.words.length).toBeGreaterThan(900);
     // Each row is [word, level, category]: the "very close" and "close" lists stay on the server.
     expect(wl.words.every((r: unknown[]) => r.length === 3 && r.every((x) => typeof x === "string"))).toBe(true);
-    expect(JSON.stringify(wl)).not.toContain("kennel");
+    expect(JSON.stringify(wl)).not.toContain("doggy");
   });
 });

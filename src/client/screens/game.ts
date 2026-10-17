@@ -413,6 +413,8 @@ function renderAway(v: View, isDrawer: boolean, online: boolean) {
 }
 
 const LEVEL_LABEL = { easy: "Easy", medium: "Medium", hard: "Hard", custom: "Your words" } as const;
+/** The drawer's prize for each difficulty, matching DRAWER_LEVEL_BONUS in rules.ts. */
+const LEVEL_PRIZE = { easy: "", medium: " ×1.25", hard: " ×1.5", custom: "" } as const;
 
 function revealReason(v: View): string {
   const drawer = player(v.drawer);
@@ -528,7 +530,7 @@ function renderOverlay(v: View, isDrawer: boolean) {
       key += `:pick:${v.choices.map((c) => c.word).join("|")}`;
       html = `<div class="ocard"><p class="eyebrow">Your turn</p><h2 class="h2">Pick a word to draw</h2>
         <div class="choices">${v.choices
-          .map((c, i) => `<button type="button" class="choice" data-i="${i}"><span class="cw">${esc(c.word)}</span><span class="cmeta">${esc(c.category ?? "Your words")}${c.level !== "custom" ? ` · ${LEVEL_LABEL[c.level]}` : ""}</span></button>`)
+          .map((c, i) => `<button type="button" class="choice" data-i="${i}"><span class="cw">${esc(c.word)}</span><span class="cmeta">${esc(c.category ?? "Your words")}${c.level !== "custom" ? ` · ${LEVEL_LABEL[c.level]}${LEVEL_PRIZE[c.level]}` : ""}</span></button>`)
           .join("")}</div>
         <p class="lede">If you don't pick, one is chosen for you.</p></div>`;
     } else {

@@ -54,20 +54,28 @@ describe("scoring", () => {
     const draw = 80000;
     let last = Infinity;
     for (let order = 0; order < 11; order++) {
-      const remaining = draw - order * 5000;
-      const pts = guessPoints(order, remaining, draw);
+      const elapsed = order * 5000;
+      const pts = guessPoints(order, elapsed, draw);
       expect(pts).toBeLessThan(last);
       last = pts;
     }
-    expect(guessPoints(0, 80000, 80000)).toBe(300);
-    expect(guessPoints(0, 0, 80000)).toBe(200);
+    expect(guessPoints(0, 0, 80000)).toBe(300);
+    expect(guessPoints(0, 80000, 80000)).toBe(200);
     expect(guessPoints(5, 40000, 80000)).toBe(150);
+    // A quick second guess keeps its speed bonus even though the race cut the clock to 30 s.
+    expect(guessPoints(1, 22000, 80000)).toBe(160 + 73);
   });
   test("drawer gets a share of 300", () => {
     expect(drawerPoints(3, 6)).toBe(150);
     expect(drawerPoints(6, 6)).toBe(300);
     expect(drawerPoints(0, 6)).toBe(0);
     expect(drawerPoints(1, 0)).toBe(0);
+  });
+  test("harder words pay the drawer more", () => {
+    expect(drawerPoints(6, 6, "easy")).toBe(300);
+    expect(drawerPoints(6, 6, "medium")).toBe(375);
+    expect(drawerPoints(3, 6, "hard")).toBe(225);
+    expect(drawerPoints(6, 6, "custom")).toBe(300);
   });
   test("ranking shares places on ties", () => {
     const r = rankPlayers([{ score: 10 }, { score: 30 }, { score: 30 }, { score: 5 }]);

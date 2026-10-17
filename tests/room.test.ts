@@ -152,6 +152,7 @@ describe("a full game", () => {
     expect(v.firstInRound).toBe(true);
     const d = h.drawerCid();
     expect(h.view(d).choices?.length).toBe(3);
+    expect(h.view(d).choices!.map((c) => c.level)).toEqual(["easy", "medium", "hard"]); // mixed: one of each
     for (const c of ["c1", "c2", "c3"]) if (c !== d) expect(h.view(c).choices).toBeNull();
 
     h.send(d, { t: "choose", i: 1 });
@@ -204,7 +205,7 @@ describe("a full game", () => {
     expect(v.word).toBe(word);
     const second = v.turnScores!.find((s) => s.id === h.pidOf.get(guessers[1]))!.pts;
     expect(second).toBeLessThan(first);
-    expect(v.turnScores!.find((s) => s.id === v.drawer)!.pts).toBe(300);
+    expect(v.turnScores!.find((s) => s.id === v.drawer)!.pts).toBe(375); // choice 1 is the medium word: 300 × 1.25
     expect(h.storage.has("gal:0")).toBe(true);
 
     // Remaining turns run on timers (nobody guesses).
@@ -300,6 +301,20 @@ describe("words, categories and guessing", () => {
     h.send(g1, { t: "chat", text: typo });
     expect(h.chat(g1).some((m) => m.k === "you" && m.text.includes("close enough"))).toBe(true);
     expect(h.view(g1).guessed).toContain(h.pidOf.get(g1));
+  });
+
+  test("away players don't cut the drawer's points", () => {
+    const h = lobby(4);
+    h.send("c1", { t: "start" });
+    const d = h.drawerCid();
+    h.send(d, { t: "choose", i: 0 }); // the easy word
+    const word = h.view(d).word!;
+    const [away, ...rest] = ["c1", "c2", "c3", "c4"].filter((c) => c !== d);
+    h.drop(away);
+    for (const g of rest) h.send(g, { t: "chat", text: word });
+    const v = h.view(d);
+    expect(v.reason).toBe("all");
+    expect(v.turnScores!.find((s) => s.id === v.drawer)!.pts).toBe(300);
   });
 
   test("the drawer can end their turn", () => {
