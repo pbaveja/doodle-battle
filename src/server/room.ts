@@ -1232,6 +1232,13 @@ export class RoomCore {
 
   /* =================== views & sending =================== */
 
+  /** A specific category is always shown. With all categories, the host's switch decides, and hard words stay hidden. */
+  private showsCategory(entry: Entry): boolean {
+    if (!entry.category) return false;
+    if (this.settings.category !== "all") return true;
+    return this.settings.showCategory && (entry.level === "easy" || entry.level === "medium");
+  }
+
   view(pid: string, now: number): View {
     const t = this.turn;
     const isDrawer = t?.drawer === pid;
@@ -1261,7 +1268,7 @@ export class RoomCore {
       word: showWord ? t!.word : null,
       mask: t?.word && this.phase === "drawing" ? maskWord(t.word, t.revealed) : null,
       choices: isDrawer && this.phase === "choosing" ? t!.choices.map((c) => ({ word: c.word, category: categoryLabel(c.category), level: c.level })) : null,
-      category: t?.entry && t.word && (t.entry.level === "easy" || t.entry.level === "medium") && this.phase !== "choosing" ? categoryLabel(t.entry.category) : null,
+      category: t?.entry && t.word && this.phase !== "choosing" && this.showsCategory(t.entry) ? categoryLabel(t.entry.category) : null,
       players,
       guessed: t ? t.guessed.map((g) => g.id) : [],
       turnScores: this.phase === "reveal" ? t?.scores ?? null : null,

@@ -59,6 +59,10 @@ export function initLobby(onLeave: () => void) {
     if (!isHost()) return;
     send({ t: "settings", s: { category: cat.value } });
   });
+  $<HTMLInputElement>("#showCategory").addEventListener("change", (e) => {
+    if (!isHost()) return;
+    send({ t: "settings", s: { showCategory: (e.target as HTMLInputElement).checked } });
+  });
   $<HTMLInputElement>("#photosOn").addEventListener("change", (e) => {
     if (!isHost()) return;
     send({ t: "settings", s: { photos: (e.target as HTMLInputElement).checked } });
@@ -157,6 +161,12 @@ export function renderLobby(v: View) {
   cat.disabled = !host;
   const onlyMine = s.customOnly && v.customCount >= LIMITS.customOnlyMin;
   cat.closest(".setting")!.classList.toggle("muted", onlyMine);
+  // A chosen category is always shown, so the switch only matters (and is only editable) for "All categories".
+  const showCat = $<HTMLInputElement>("#showCategory");
+  const catPicked = s.category !== "all";
+  showCat.checked = catPicked || s.showCategory;
+  showCat.disabled = !host || catPicked;
+  $("#showCategoryHint").textContent = catPicked ? "Always shown when a category is chosen" : "Guessers see the word's category";
   const custom = $<HTMLTextAreaElement>("#customWords");
   custom.readOnly = !host;
   if (document.activeElement !== custom) custom.value = s.customWords;

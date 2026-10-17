@@ -275,13 +275,29 @@ describe("words, categories and guessing", () => {
     expect(h.view(g).word).toBeNull();
   });
 
-  test("hard words hide the category", () => {
+  test("with all categories, hard words hide the category", () => {
     const h = lobby(2);
-    h.send("c1", { t: "settings", s: { category: "movies", difficulty: "hard" } });
+    h.send("c1", { t: "settings", s: { difficulty: "hard" } });
     h.send("c1", { t: "start" });
     const d = h.drawerCid();
     h.send(d, { t: "choose", i: 0 });
     expect(h.view(d === "c1" ? "c2" : "c1").category).toBeNull();
+  });
+
+  test("the host can hide the category, unless a specific category is chosen", () => {
+    const guesserView = (settings: object) => {
+      const h = lobby(2);
+      h.send("c1", { t: "settings", s: { difficulty: "easy", ...settings } });
+      h.send("c1", { t: "start" });
+      const d = h.drawerCid();
+      h.send(d, { t: "choose", i: 0 });
+      return h.view(d === "c1" ? "c2" : "c1").category;
+    };
+    expect(guesserView({})).not.toBeNull(); // default: shown
+    expect(guesserView({ showCategory: false })).toBeNull();
+    expect(guesserView({ showCategory: true })).not.toBeNull();
+    expect(guesserView({ category: "animals", showCategory: false })).toBe("Animals");
+    expect(guesserView({ category: "movies", difficulty: "hard", showCategory: false })).toBe("Movies & TV");
   });
 
   test("typos score, near misses and related words get private nudges", () => {
