@@ -262,6 +262,7 @@ export function sanitizeSettings(input: unknown, current: Settings, playerCount:
   if (typeof i.customWords === "string") s.customWords = i.customWords.replace(CONTROL, (c) => (c === "\n" ? c : "")).slice(0, LIMITS.customMaxChars);
   if (typeof i.customOnly === "boolean") s.customOnly = i.customOnly;
   if (typeof i.category === "string" && (i.category === "all" || CATEGORY_IDS.includes(i.category))) s.category = i.category;
+  if (typeof i.showCategory === "boolean") s.showCategory = i.showCategory;
   if (typeof i.photos === "boolean") s.photos = i.photos;
   return s;
 }

@@ -20,6 +20,8 @@ export interface Settings {
   customOnly: boolean;
   /** "all" or a category id from categories.ts */
   category: string;
+  /** Show guessers the word's category. A specific category (not "all") is always shown. */
+  showCategory: boolean;
   /** Players may use a photo of themselves. When off, photos aren't sent or kept at all. */
   photos: boolean;
 }
@@ -33,6 +35,7 @@ export const DEFAULT_SETTINGS: Settings = {
   customWords: "",
   customOnly: false,
   category: "all",
+  showCategory: true,
   photos: true,
 };
 
