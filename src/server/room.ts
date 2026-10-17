@@ -26,6 +26,7 @@ interface Entry {
 }
 
 const BUILT_IN: Entry[] = WORD_ENTRIES.map((e) => ({ ...e }));
+const MIXED_LEVELS = ["easy", "medium", "hard"] as const;
 const BUILT_IN_KEYS = new Set(BUILT_IN.map((e) => normalizeGuess(e.word)));
 const customEntry = (word: string): Entry => ({ word, level: "custom", category: null, very: [], close: [] });
 
@@ -793,19 +794,19 @@ export class RoomCore {
   }
 
   /** Built-in words for the chosen category and difficulty, widening when a pool runs dry. */
-  private builtInPool(): Entry[][] {
+  /** In mixed mode, choice i is easy, medium or hard, so the drawer can always gamble on a hard word. */
+  private builtInPool(choice: number): Entry[][] {
     const cat = this.settings.category;
     const inCat = cat === "all" ? BUILT_IN : BUILT_IN.filter((e) => e.category === cat);
     const d = this.settings.difficulty;
-    const leveled = d === "mixed" ? inCat : inCat.filter((e) => e.level === d);
-    return [leveled, inCat, BUILT_IN];
+    const level = d === "mixed" ? MIXED_LEVELS[choice % MIXED_LEVELS.length] : d;
+    return [inCat.filter((e) => e.level === level), inCat, BUILT_IN];
   }
 
   private pickWords(n: number): Entry[] {
     const custom = parseCustomWords(this.settings.customWords).map(customEntry);
     const onlyCustom = this.settings.customOnly && custom.length >= LIMITS.customOnlyMin;
     const fresh = (list: Entry[]) => list.filter((e) => !this.used.has(normalizeGuess(e.word)));
-    const tiers = this.builtInPool();
     const out: Entry[] = [];
     const take = (list: Entry[]) => {
       let options = list.filter((e) => !out.some((o) => normalizeGuess(o.word) === normalizeGuess(e.word)));
@@ -823,6 +824,7 @@ export class RoomCore {
         if (!take(custom)) break; // all custom words used: allow repeats
         continue;
       }
+      const tiers = this.builtInPool(i);
       if (tiers.some((t) => take(fresh(t)))) continue;
       if (!take(tiers[1]) && !take(BUILT_IN)) break;
     }
@@ -872,9 +874,10 @@ export class RoomCore {
     if (!t || this.phase !== "drawing") return;
     t.reason = reason;
     const drawer = this.players.get(t.drawer);
-    const others = [...this.players.values()].filter((p) => p.id !== t.drawer).length;
-    const eligible = Math.max(t.guessed.length, others);
-    const dpts = reason === "drawer_left" || !drawer ? 0 : drawerPoints(t.guessed.length, eligible);
+    // Players who are away don't count against the drawer, unless they guessed first.
+    const others = [...this.players.values()].filter((p) => p.id !== t.drawer && this.isActive(p)).length;
+    const eligible = Math.max(t.guessed.length, others + t.guessed.filter((g) => !this.isActive(this.players.get(g.id)!)).length);
+    const dpts = reason === "drawer_left" || !drawer ? 0 : drawerPoints(t.guessed.length, eligible, t.entry?.level);
     if (drawer) drawer.score += dpts;
     const scores: TurnScore[] = [];
     for (const p of this.players.values()) {
@@ -1166,7 +1169,7 @@ export class RoomCore {
       const entry = t.entry ?? customEntry(t.word);
       const verdict = judgeGuess(text, entry, this.otherWords(entry.word));
       if (verdict.kind === "correct") {
-        const pts = guessPoints(t.guessed.length, (this.phaseEnds ?? now) - now, this.settings.drawTime * 1000);
+        const pts = guessPoints(t.guessed.length, now - (this.phaseStarted ?? now), this.settings.drawTime * 1000);
         p.score += pts;
         t.guessed.push({ id: p.id, pts });
         this.pushChat({ k: "correct", ...base, text: `${p.name} guessed the word!` }, "all");

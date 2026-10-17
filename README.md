@@ -89,9 +89,9 @@ same Wi-Fi, use your computer's local IP instead of `localhost`.
 
 ## Words and guessing
 
-- **1,000+ English words in 14 categories** (Animals, Food & Drink, Movies & TV, Brands and more), each
+- **2,300+ English words in 14 categories** (Animals, Food & Drink, Movies & TV, Brands and more), each
   tagged easy, medium or hard. The host picks a difficulty and either one category or all of them, and
-  can add their own words.
+  can add their own words. On "mixed", the drawer always gets one easy, one medium and one hard word.
 - **Easy and medium words show their category** next to the blanks, like "ANIMALS".
 - **Spelling slips count.** `girafe`, `elefant`, `baot` and `spider man` all score. Short words need to be
   exact, except for swapped letters (`dgo`). A different real word (`goat` for `boat`) never counts.
@@ -130,8 +130,12 @@ It doesn't use the game's free-tier allowance.
 
 | Who | Points |
 |---|---|
-| Guesser | Order points (1st 200, 2nd 160, 3rd 130, 4th 110, then 100) plus up to 100 for time left |
-| Drawer | 300 × the share of players who guessed |
+| Guesser | Order points (1st 200, 2nd 160, 3rd 130, 4th 110, then 100) plus up to 100 for speed, counted from the start of drawing |
+| Drawer | 300 × the share of active players who guessed, × 1.25 for a medium word and × 1.5 for a hard one |
+
+The speed bonus is measured from when drawing began, so it isn't cut short when the race shrinks the
+clock. Players who are away don't count against the drawer. The bigger prize for harder words gives a
+player who is behind a real gamble to catch up.
 
 **The race:** the first correct guess drops the clock to 30 seconds for everyone (if more was left), with
 a soft tick-tock every second until the end, and any letter hints still to come fold into one at 10

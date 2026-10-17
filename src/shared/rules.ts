@@ -160,16 +160,25 @@ export const LATER_POINTS = 100;
 export const SPEED_BONUS = 100;
 export const DRAWER_MAX = 300;
 
-/** Order points plus a speed bonus for time left, so an earlier correct guess always scores more. */
-export function guessPoints(order: number, remainingMs: number, drawMs: number): number {
+/** The drawer's points grow with the word's difficulty, so a player who is behind can gamble on a hard word. */
+export const DRAWER_LEVEL_BONUS: Record<string, number> = { easy: 1, medium: 1.25, hard: 1.5 };
+
+/**
+ * Order points plus a speed bonus for how quickly the word was guessed, so an earlier correct
+ * guess always scores more. `elapsedMs` counts from the start of drawing, so the bonus is not
+ * cut short when the race shrinks the clock.
+ */
+export function guessPoints(order: number, elapsedMs: number, drawMs: number): number {
   const base = order < ORDER_POINTS.length ? ORDER_POINTS[order] : LATER_POINTS;
-  const frac = drawMs > 0 ? Math.min(1, Math.max(0, remainingMs / drawMs)) : 0;
+  const frac = drawMs > 0 ? Math.min(1, Math.max(0, 1 - elapsedMs / drawMs)) : 0;
   return base + Math.round(SPEED_BONUS * frac);
 }
 
-export function drawerPoints(guessed: number, eligible: number): number {
+/** A share of 300 for the guessers who got it, raised for medium and hard words. */
+export function drawerPoints(guessed: number, eligible: number, level?: string): number {
   if (eligible <= 0 || guessed <= 0) return 0;
-  return Math.round((DRAWER_MAX * Math.min(guessed, eligible)) / eligible);
+  const bonus = (level && DRAWER_LEVEL_BONUS[level]) || 1;
+  return Math.round((DRAWER_MAX * bonus * Math.min(guessed, eligible)) / eligible);
 }
 
 /** Standard competition ranking: 1, 1, 3, 4. */
