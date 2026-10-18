@@ -165,11 +165,12 @@ export type Tool = "brush" | "fill" | "eraser";
 type Queued = { due: number; op: Op } | { due: number; pts: [number, number]; last: boolean };
 
 /** The drawer sends new points this often; viewers spread each batch over the same time. */
-const BATCH_MS = 100;
-/** Viewers play strokes this far behind, a little over one batch, so network jitter doesn't show. */
-const PLAYOUT_MS = BATCH_MS + 5;
-/** A viewer this far behind skips the buffer and catches up. */
-const MAX_LAG_MS = 450;
+const BATCH_MS = 200;
+/**
+ * Batches held up by a network hiccup arrive together and queue up behind each other. A viewer
+ * with more than this still to play skips ahead and catches up.
+ */
+const MAX_LAG_MS = 650;
 
 export class Board {
   readonly canvas: HTMLCanvasElement;
@@ -248,7 +249,9 @@ export class Board {
     }
     this.recvV += ops.length;
     const now = performance.now();
-    let base = Math.max(now + PLAYOUT_MS, this.lastDue);
+    // A batch plays as soon as it arrives, or straight after the one before it. Holding it back
+    // wouldn't hide a late batch (the line pauses either way), it would only add delay.
+    let base = Math.max(now, this.lastDue);
     if (base - now > MAX_LAG_MS) base = now; // fell behind: catch up
     let total = 0;
     for (const op of ops) if (op.k === "m") total += op.p.length / 2;

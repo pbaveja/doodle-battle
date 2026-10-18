@@ -11,7 +11,7 @@ import { addDrawing, initOver, renderOver, resetOver } from "./screens/over";
 import { initPractice, leavePractice, showPracticeSetup } from "./screens/practice";
 import { initCamera } from "./camera";
 import { clearRoomPhotos, putPhoto, restoreMyPhoto } from "./photos";
-import { commitPhoto, resetPhotoSync, syncPhoto } from "./roomphoto";
+import { commitPhoto, notePhoto, resetPhotoSync, syncPhoto } from "./roomphoto";
 import { sfx, sound, unlock } from "./sound";
 import { $, $$, store } from "./util";
 
@@ -362,6 +362,7 @@ function onMessage(m: ServerMsg) {
       addDrawing(m);
       break;
     case "photo":
+      notePhoto(m.id, m.v, m.data);
       if (putPhoto(m.id, m.v, m.data) && app.view && app.view.players.some((p) => p.id === m.id && p.photo === m.v)) rerender();
       break;
     case "err":
