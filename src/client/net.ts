@@ -38,7 +38,7 @@ export class Conn {
       this.offline = false;
       this.onStatus();
       if (this.status !== "open") this.retryNow();
-      else this.ping(3000);
+      else this.heartbeat(3000);
     });
     this.on(window, "offline", () => {
       this.offline = true;
@@ -48,7 +48,7 @@ export class Conn {
     });
     this.on(document, "visibilitychange", () => {
       if (document.visibilityState !== "visible") return;
-      if (this.status === "open") this.ping(3500);
+      if (this.status === "open") this.heartbeat(3500);
       else if (this.status === "retrying") this.retryNow();
     });
     this.on(window, "pageshow", () => {
@@ -165,9 +165,10 @@ export class Conn {
       this.onStatus();
       // A socket that opens but never gets a welcome is treated as dead.
       this.readyTimer = window.setTimeout(() => this.fail(), OPEN_TIMEOUT);
-      // A quick burst of pings gives a good clock estimate, then a steady heartbeat, which the
-      // server answers without waking the room.
-      [0, 300, 700, 1200].forEach((d) => setTimeout(() => this.ping(0), d));
+      // Two pings give a good clock estimate (the room's first state gives a rough one sooner).
+      // Samples are kept across reconnects, so after that one more is enough. Then a steady
+      // heartbeat, which the server answers without waking the room.
+      (this.haveSample ? [0] : [0, 1000]).forEach((d) => setTimeout(() => this.ping(), d));
       this.heartbeatTimer = window.setInterval(() => this.heartbeat(), HEARTBEAT_EVERY);
     };
     ws.onmessage = (e) => {
@@ -233,18 +234,16 @@ export class Conn {
     this.retryTimer = window.setTimeout(() => this.open(), delay);
   }
 
-  private heartbeat() {
+  /** Check the connection is alive. Also used when the page comes back, since it doesn't wake the room. */
+  private heartbeat(timeout = PONG_TIMEOUT) {
     if (!this.sendText(HEARTBEAT)) return;
     clearTimeout(this.pongTimer);
-    this.pongTimer = window.setTimeout(() => this.fail(), PONG_TIMEOUT);
+    this.pongTimer = window.setTimeout(() => this.fail(), timeout);
   }
 
-  private ping(timeout: number) {
-    if (!this.send({ t: "ping", c: Date.now() })) return;
-    if (timeout > 0) {
-      clearTimeout(this.pongTimer);
-      this.pongTimer = window.setTimeout(() => this.fail(), timeout);
-    }
+  /** A clock-sync sample. */
+  private ping() {
+    this.send({ t: "ping", c: Date.now() });
   }
 
   private onPong(c: number, s: number) {

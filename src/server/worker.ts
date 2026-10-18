@@ -162,6 +162,8 @@ export class Room {
           return null; // socket is closing
         }
       },
+      // An object, so Workers Logs indexes each field for filtering.
+      log: (entry) => console.log(entry),
       sendGallery: (cid, turn) => {
         void this.ctx.storage.get(`gal:${turn}`).then((entry) => {
           const ws = this.sockets.get(cid);
@@ -186,9 +188,14 @@ export class Room {
     const url = new URL(req.url);
     const code = req.headers.get("x-room") ?? "";
     if (url.pathname === "/claim") {
-      return this.core.claim(code) ? new Response("ok") : new Response("taken", { status: 409 });
+      const ok = this.core.claim(code);
+      this.core.note("http");
+      return ok ? new Response("ok") : new Response("taken", { status: 409 });
     }
-    if (url.pathname === "/info") return json(this.core.info());
+    if (url.pathname === "/info") {
+      this.core.note("http");
+      return json(this.core.info());
+    }
     if (url.pathname === "/ws") {
       const pair = new WebSocketPair();
       const client = pair[0], server = pair[1];
@@ -219,6 +226,7 @@ export class Room {
   }
 
   private dropSocket(ws: CfWebSocket) {
+    this.core.note("closes");
     const a = ws.deserializeAttachment() as Attachment | null;
     if (!a?.cid) return;
     if (this.sockets.get(a.cid) === ws) this.sockets.delete(a.cid);
@@ -227,6 +235,7 @@ export class Room {
 
   alarm() {
     this.alarmAt = null;
+    this.core.note("alarms");
     this.core.onAlarm();
   }
 }

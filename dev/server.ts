@@ -57,6 +57,7 @@ function getRoom(code: string): DevRoom {
       if (at !== null) room.timer = setTimeout(() => { room.timer = null; room.core.onAlarm(); }, Math.max(0, at - Date.now()) + 5);
     },
     lastHeartbeat: (cid) => room.heartbeats.get(cid) ?? null,
+    log: (entry) => console.log(JSON.stringify(entry)),
     save: (entries) => { for (const [k, v] of Object.entries(entries)) room.storage.set(k, structuredClone(v)); },
     remove: (keys) => { for (const k of keys) room.storage.delete(k); },
     sendGallery: (cid, turn) => {

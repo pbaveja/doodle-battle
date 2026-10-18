@@ -5,7 +5,7 @@
 import {
   CLOSE, HEARTBEAT, INKS, LIMITS, PID_RE, PROTOCOL, TIMING,
   type ChatKind, type ChatMsg, type EndReason, type ErrCode, type GalleryEntry, type Item,
-  type Phase, type PlayerView, type Result, type RoomInfo, type ServerMsg, type Settings,
+  type ClientMsg, type Phase, type PlayerView, type Result, type RoomInfo, type ServerMsg, type Settings,
   type Timing, type TurnScore, type View,
 } from "../shared/protocol";
 import {
@@ -43,6 +43,8 @@ export interface RoomIO {
   sendGallery(cid: string, turn: number): void;
   /** When the platform last answered this connection's heartbeat without waking the room, if it does. */
   lastHeartbeat(cid: string): number | null;
+  /** Write one structured log line (Workers Logs on Cloudflare). */
+  log(entry: Record<string, unknown>): void;
   destroy(): void;
   now(): number;
   random(): number;
@@ -126,7 +128,40 @@ interface Snapshot {
   galleryTurns: number[];
   owner?: string;
   photoSeq?: number;
+  tally?: Tally;
 }
+
+/**
+ * What reached the room since the last report. It's logged when a game ends and when the room
+ * closes, to show where the room's Durable Object requests come from. It rides along with state
+ * saves, so a restart keeps it, but anything counted after the last save is lost if the room sleeps.
+ */
+interface Tally {
+  since: number;
+  /** Incoming WebSocket messages by type ("bad" for anything that isn't a client message). */
+  types: Record<string, number>;
+  /** WebSocket connections opened. */
+  connects: number;
+  /** WebSocket close and error events from the platform. */
+  closes: number;
+  /** Durable alarms that fired. The in-memory timer normally gets there first, so these follow restarts. */
+  alarms: number;
+  /** HTTP requests: claiming the room and looking it up before joining. */
+  http: number;
+  /** Times the room was loaded from storage: waking from hibernation, or after a restart or deploy. */
+  wakes: number;
+}
+/** Events only the platform sees, counted through `RoomCore.note`. */
+export type TallyEvent = "closes" | "alarms" | "http";
+
+const newTally = (since: number): Tally => ({ since, types: {}, connects: 0, closes: 0, alarms: 0, http: 0, wakes: 0 });
+
+/** Every message type a client sends. Anything else is counted as "bad". */
+const CLIENT_TYPES: Record<ClientMsg["t"], true> = {
+  hello: true, ping: true, hb: true, profile: true, settings: true, start: true, choose: true,
+  draw: true, sync: true, chat: true, kick: true, leave: true, end: true, skip: true, away: true,
+  back: true, lobby: true, drawing: true, photo: true,
+};
 
 /** A player's photo. Stored under its own key (`photo:<pid>`) so the frequent state saves stay small. */
 export interface StoredPhoto {
@@ -177,6 +212,7 @@ export class RoomCore {
   private lastStateSave = 0;
   private lastCanvasSave = 0;
   private destroyed = false;
+  private tally = newTally(0);
 
   constructor(private io: RoomIO, private timing: Timing = TIMING) {}
 
@@ -193,6 +229,7 @@ export class RoomCore {
     this.code = code;
     this.created = now;
     this.emptySince = now;
+    this.tally = newTally(now);
     this.stateDirty = this.stateUrgent = true;
     this.flush();
     return true;
@@ -266,6 +303,8 @@ export class RoomCore {
     this.results = snap.results;
     this.galleryTurns = snap.galleryTurns ?? [];
     this.photoSeq = snap.photoSeq ?? 0;
+    this.tally = snap.tally ?? newTally(now);
+    this.tally.wakes++;
     this.photos.clear();
     for (const p of this.players.values()) {
       const ph = this.settings.photos ? photos?.get(p.id) : undefined;
@@ -323,6 +362,7 @@ export class RoomCore {
       results: this.results,
       galleryTurns: this.galleryTurns,
       photoSeq: this.photoSeq,
+      tally: this.tally,
     };
   }
 
@@ -330,6 +370,7 @@ export class RoomCore {
 
   onOpen(cid: string) {
     const now = this.io.now();
+    this.tally.connects++;
     this.conns.set(cid, { pid: null, opened: now, seen: now, chat: [], drawWindow: 0, drawCount: 0, photo: [] });
     this.emptySince = null;
     this.flush();
@@ -362,17 +403,31 @@ export class RoomCore {
     this.flush();
   }
 
+  /** Count something only the platform sees (see `Tally`). */
+  note(event: TallyEvent) {
+    this.tally[event]++;
+  }
+
+  private countMsg(type: string) {
+    this.tally.types[type] = (this.tally.types[type] ?? 0) + 1;
+  }
+
   onMessage(cid: string, raw: unknown) {
     const conn = this.conns.get(cid);
     if (!conn) return;
     conn.seen = this.io.now();
-    if (typeof raw !== "string") return;
+    if (typeof raw !== "string") {
+      this.countMsg("bad");
+      return;
+    }
     if (raw === HEARTBEAT) {
       // Cloudflare answers these before they reach the room; this covers anything that doesn't.
+      this.countMsg("hb");
       this.io.send(cid, HEARTBEAT);
       return;
     }
     if (raw.length > 400_000) {
+      this.countMsg("bad");
       this.io.close(cid, CLOSE.BAD_HELLO, "message too large");
       return;
     }
@@ -380,9 +435,14 @@ export class RoomCore {
     try {
       m = JSON.parse(raw);
     } catch {
+      this.countMsg("bad");
       return;
     }
-    if (!m || typeof m !== "object" || typeof m.t !== "string") return;
+    if (!m || typeof m !== "object" || typeof m.t !== "string") {
+      this.countMsg("bad");
+      return;
+    }
+    this.countMsg(Object.hasOwn(CLIENT_TYPES, m.t) ? m.t : "bad");
     const now = this.io.now();
 
     if (m.t === "ping") {
@@ -933,6 +993,28 @@ export class RoomCore {
     if (top.length === 1) this.sys(`${top[0].name} wins with ${top[0].score} points!`);
     else if (top.length > 1) this.sys(`It's a tie between ${top.map((r) => r.name).join(" and ")}!`);
     this.markView(true);
+    this.report("game_over", now);
+  }
+
+  /** Log what reached the room since the last report (see `Tally`), then start counting again. */
+  private report(why: "game_over" | "closed", now: number) {
+    const { since, types, ...events } = this.tally;
+    const msgs = Object.values(types).reduce((a, b) => a + b, 0);
+    this.io.log({
+      event: "room_tally",
+      room: this.code,
+      why,
+      minutes: Math.round((now - since) / 6000) / 10,
+      players: this.players.size,
+      ...(why === "game_over" ? { rounds: this.round, turns: this.turnCount } : {}),
+      msgs,
+      types,
+      ...events,
+      // Roughly what Cloudflare bills: incoming messages count 1/20 each; connects, alarms and HTTP 1 each.
+      // The dashboard's Requests chart counts every message as one.
+      billed: Math.ceil(msgs / 20) + events.connects + events.alarms + events.http,
+    });
+    this.tally = newTally(now);
   }
 
   private toLobby() {
@@ -1064,6 +1146,7 @@ export class RoomCore {
     if (this.conns.size === 0) {
       this.emptySince ??= now;
       if (now - this.emptySince >= this.timing.emptyTtlMs) {
+        this.report("closed", now);
         this.destroyed = true;
         this.io.destroy();
         return false;

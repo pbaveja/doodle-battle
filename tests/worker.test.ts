@@ -203,6 +203,30 @@ describe("Durable Object wrapper", () => {
     expect(Math.abs(f.getAlarm()! - (left + TIMING.seatHoldLobbyMs))).toBeLessThan(1000);
   });
 
+  test("the per-game tally counts lookups, connects, alarms and closes", async () => {
+    const f = fakeCtx();
+    const room: any = new Room(f.ctx as any, {} as any);
+    await tick();
+    await room.fetch(claim());
+    await room.fetch(new Request("https://room/info"));
+    const [asha, ben] = await joinAll(f, room, ["Asha", "Ben"]);
+    room.webSocketMessage(asha, JSON.stringify({ t: "start" }));
+    room.alarm();
+    room.webSocketClose(ben, 1006, "gone");
+    const logs: unknown[] = [];
+    const realLog = console.log;
+    console.log = (e: unknown) => { logs.push(e); };
+    try {
+      room.webSocketMessage(asha, JSON.stringify({ t: "end" }));
+    } finally {
+      console.log = realLog;
+    }
+    expect(logs).toEqual([expect.objectContaining({
+      event: "room_tally", why: "game_over", msgs: 4, types: { hello: 2, start: 1, end: 1 },
+      connects: 2, closes: 1, alarms: 1, http: 2, wakes: 0, billed: 6,
+    })]);
+  });
+
   test("worker routes", async () => {
     const stubs = new Map<string, any>();
     const env = {
