@@ -14,6 +14,7 @@ class Harness {
   autoHeartbeat = new Set<string>();
   heartbeats = new Map<string, number>();
   storage = new Map<string, unknown>();
+  logs: Record<string, unknown>[] = [];
   inbox = new Map<string, ServerMsg[]>();
   closed = new Map<string, number>();
   seed = 7;
@@ -45,6 +46,7 @@ class Harness {
       save: (e) => { for (const [k, v] of Object.entries(e)) this.storage.set(k, structuredClone(v)); },
       remove: (keys) => keys.forEach((k) => this.storage.delete(k)),
       lastHeartbeat: (cid) => this.heartbeats.get(cid) ?? null,
+      log: (e) => { this.logs.push(e); },
       sendGallery: (cid, turn) => {
         const e = this.storage.get(`gal:${turn}`);
         if (e) this.io().send(cid, JSON.stringify({ t: "drawing", ...(e as object) }));
@@ -778,5 +780,50 @@ describe("the race after the first guess", () => {
     h.send(guessers[2], { t: "chat", text: word });
     expect(h.view(d).phase).toBe("reveal");
     expect(h.view(d).reason).toBe("all");
+  });
+});
+
+describe("traffic tally", () => {
+  test("each game logs what reached the room, then counting starts again until the room closes", () => {
+    const h = lobby(2);
+    for (const c of ["c1", "c2"]) h.autoHeartbeat.add(c); // heartbeats never reach the room
+    h.send("c1", { t: "settings", s: { rounds: 1 } });
+    h.send("c1", { t: "start" });
+    const d = h.drawerCid();
+    const g = d === "c1" ? "c2" : "c1";
+    h.send(d, { t: "choose", i: 0 });
+    h.send(d, { t: "draw", v: 0, ops: [{ k: "b", c: 0, w: 12, x: 1, y: 1 }] });
+    h.send(d, { t: "draw", v: 1, ops: [{ k: "m", p: [2, 2] }, { k: "e" }] });
+    h.send(g, { t: "chat", text: "zebra" });
+    h.core.onMessage(g, HEARTBEAT);
+    h.core.onMessage(g, "not json");
+    h.send(g, { t: "dance" });
+    expect(h.logs).toEqual([]);
+    h.send("c1", { t: "end" });
+    expect(h.logs).toEqual([{
+      event: "room_tally", room: "ABCDE", why: "game_over", minutes: 0, players: 2, rounds: 1, turns: 1, msgs: 12,
+      types: { hello: 2, settings: 1, start: 1, choose: 1, draw: 2, chat: 1, hb: 1, bad: 2, end: 1 },
+      connects: 2, closes: 0, alarms: 0, http: 0, wakes: 0, billed: 3,
+    }]);
+
+    h.send("c2", { t: "chat", text: "gg" });
+    h.drop("c1");
+    h.drop("c2");
+    h.advance(TIMING.seatHoldLobbyMs + TIMING.emptyTtlMs + 1000);
+    expect(h.core.exists()).toBe(false);
+    expect(h.logs.length).toBe(2);
+    expect(h.logs[1]).toMatchObject({ why: "closed", players: 0, msgs: 1, types: { chat: 1 }, connects: 0, billed: 1 });
+    expect(h.logs[1]).not.toHaveProperty("turns");
+    expect(h.logs[1].minutes).toBe(TIMING.emptyTtlMs / 60_000);
+  });
+
+  test("the tally is saved with the room, so a restart doesn't lose it", () => {
+    const h = lobby(2);
+    h.send("c1", { t: "start" });
+    const core2 = new RoomCore(h.io());
+    core2.restore(h.storage.get("state") as never, undefined);
+    core2.rebind("c1", P[0]);
+    core2.onMessage("c1", JSON.stringify({ t: "end" }));
+    expect(h.logs).toEqual([expect.objectContaining({ why: "game_over", types: { hello: 2, start: 1, end: 1 }, connects: 2, wakes: 1 })]);
   });
 });

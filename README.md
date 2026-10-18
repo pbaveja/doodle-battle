@@ -159,6 +159,13 @@ works out to roughly 50 full 8-player games a day (more for shorter games). A qu
 between messages. Limits reset at 00:00 UTC. The $5/month Workers Paid plan removes this
 ceiling if you ever need it.
 
+To see where a room's requests go, each room logs one `room_tally` line when a game ends and when
+the room closes. It lists incoming messages by type, WebSocket connects and closes, alarms that
+fired, HTTP lookups, wake-ups from storage, and a rough billed total. Find these lines in the
+Cloudflare dashboard under Workers & Pages → doodle-battle → Logs (search for `room_tally`), or
+watch them live with `npm run logs`. The dashboard's Requests chart counts every incoming message
+as one request; billing counts 20 messages as one.
+
 ## Project layout
 
 ```
