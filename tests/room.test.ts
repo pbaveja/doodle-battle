@@ -827,3 +827,28 @@ describe("traffic tally", () => {
     expect(h.logs).toEqual([expect.objectContaining({ why: "game_over", types: { hello: 2, start: 1, end: 1 }, connects: 2, wakes: 1 })]);
   });
 });
+
+describe("word variety", () => {
+  // 10 players x 8 rounds = 80 turns of 3 choices each, all categories.
+  for (const difficulty of ["easy", "medium", "hard", "mixed"] as const) {
+    test(`no word is offered twice in a long ${difficulty} game, nor in the rematch`, () => {
+      const core = new Harness().core as any;
+      core.settings.category = "all";
+      core.settings.difficulty = difficulty;
+      const seen = new Set<string>();
+      for (let game = 0; game < 2; game++) {
+        for (let turn = 0; turn < 80; turn++) {
+          const choices = core.pickWords(3) as { word: string; level: string }[];
+          expect(choices.length).toBe(3);
+          for (const [i, c] of choices.entries()) {
+            expect(seen.has(c.word)).toBe(false);
+            seen.add(c.word);
+            if (difficulty !== "mixed") expect(c.level).toBe(difficulty);
+            else expect(c.level).toBe(["easy", "medium", "hard"][i]);
+          }
+          core.used.add(choices[0].word.toLowerCase());
+        }
+      }
+    });
+  }
+});
