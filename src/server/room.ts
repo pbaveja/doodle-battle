@@ -120,6 +120,8 @@ interface Snapshot {
   phaseEnds: number | null;
   phaseStarted: number | null;
   used: string[];
+  /** Words shown as choices (picked or not). Optional: older snapshots lack it. */
+  offered?: string[];
   kicked: string[];
   chat: StoredChat[];
   chatId: number;
@@ -189,6 +191,7 @@ export class RoomCore {
   phaseEnds: number | null = null;
   phaseStarted: number | null = null;
   used = new Set<string>();
+  offered = new Set<string>();
   kicked = new Set<string>();
   chat: StoredChat[] = [];
   chatId = 0;
@@ -249,6 +252,7 @@ export class RoomCore {
     this.turnCount = 0;
     this.phaseEnds = this.phaseStarted = null;
     this.used.clear();
+    this.offered.clear();
     this.kicked.clear();
     this.chat = [];
     this.chatId = 0;
@@ -296,6 +300,7 @@ export class RoomCore {
     this.phaseEnds = snap.phaseEnds;
     this.phaseStarted = snap.phaseStarted;
     this.used = new Set(snap.used);
+    this.offered = new Set(snap.offered ?? []);
     this.kicked = new Set(snap.kicked);
     this.chat = snap.chat;
     this.chatId = snap.chatId;
@@ -355,6 +360,7 @@ export class RoomCore {
       phaseEnds: this.phaseEnds,
       phaseStarted: this.phaseStarted,
       used: [...this.used],
+      offered: [...this.offered],
       kicked: [...this.kicked],
       chat: this.chat,
       chatId: this.chatId,
@@ -790,7 +796,6 @@ export class RoomCore {
     for (const p of this.players.values()) p.score = 0;
     this.round = 1;
     this.turnCount = 0;
-    this.used.clear();
     this.results = null;
     if (this.galleryTurns.length) this.io.remove(this.galleryTurns.map((t) => `gal:${t}`));
     this.galleryTurns = [];
@@ -866,18 +871,41 @@ export class RoomCore {
   private builtInPool(choice: number): Entry[][] {
     const cat = this.settings.category;
     const inCat = cat === "all" ? BUILT_IN : BUILT_IN.filter((e) => e.category === cat);
-    const d = this.settings.difficulty;
-    const level = d === "mixed" ? MIXED_LEVELS[choice % MIXED_LEVELS.length] : d;
+    const level = this.choiceLevel(choice);
     return [inCat.filter((e) => e.level === level), inCat, BUILT_IN];
   }
 
+  private choiceLevel(choice: number) {
+    const d = this.settings.difficulty;
+    return d === "mixed" ? MIXED_LEVELS[choice % MIXED_LEVELS.length] : d;
+  }
+
+  /**
+   * Word history lasts across games in a room, so once every word at the chosen
+   * category and difficulty has been drawn, start over rather than drift to other levels.
+   */
+  private refreshHistory(n: number) {
+    for (let i = 0; i < Math.min(n, MIXED_LEVELS.length); i++) {
+      const pool = this.builtInPool(i)[0];
+      if (pool.length && pool.every((e) => this.used.has(normalizeGuess(e.word)))) {
+        this.used.clear();
+        this.offered.clear();
+        return;
+      }
+    }
+  }
+
   private pickWords(n: number): Entry[] {
+    this.refreshHistory(n);
     const custom = parseCustomWords(this.settings.customWords).map(customEntry);
     const onlyCustom = this.settings.customOnly && custom.length >= LIMITS.customOnlyMin;
-    const fresh = (list: Entry[]) => list.filter((e) => !this.used.has(normalizeGuess(e.word)));
+    const key = (e: Entry) => normalizeGuess(e.word);
+    // Prefer words nobody has seen yet, then words shown but not drawn.
+    const unseen = (list: Entry[]) => list.filter((e) => !this.used.has(key(e)) && !this.offered.has(key(e)));
+    const fresh = (list: Entry[]) => list.filter((e) => !this.used.has(key(e)));
     const out: Entry[] = [];
     const take = (list: Entry[]) => {
-      let options = list.filter((e) => !out.some((o) => normalizeGuess(o.word) === normalizeGuess(e.word)));
+      let options = list.filter((e) => !out.some((o) => key(o) === key(e)));
       // With all categories, prefer a different category for each choice.
       const varied = options.filter((e) => !e.category || !out.some((o) => o.category === e.category));
       if (varied.length) options = varied;
@@ -887,15 +915,16 @@ export class RoomCore {
     };
     for (let i = 0; i < n; i++) {
       const useCustom = onlyCustom || (custom.length > 0 && this.io.random() < 0.5);
-      if (useCustom && take(fresh(custom))) continue;
+      if (useCustom && (take(unseen(custom)) || take(fresh(custom)))) continue;
       if (onlyCustom) {
         if (!take(custom)) break; // all custom words used: allow repeats
         continue;
       }
       const tiers = this.builtInPool(i);
-      if (tiers.some((t) => take(fresh(t)))) continue;
+      if (tiers.some((t) => take(unseen(t)) || take(fresh(t)))) continue;
       if (!take(tiers[1]) && !take(BUILT_IN)) break;
     }
+    for (const e of out) this.offered.add(key(e));
     return out;
   }
 
