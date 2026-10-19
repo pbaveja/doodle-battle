@@ -35,7 +35,7 @@ export const DEFAULT_SETTINGS: Settings = {
   customWords: "",
   customOnly: false,
   category: "all",
-  showCategory: true,
+  showCategory: false,
   photos: true,
 };
 

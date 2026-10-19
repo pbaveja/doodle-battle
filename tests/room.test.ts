@@ -309,7 +309,7 @@ describe("words, categories and guessing", () => {
       h.send(d, { t: "choose", i: 0 });
       return h.view(d === "c1" ? "c2" : "c1").category;
     };
-    expect(guesserView({})).not.toBeNull(); // default: shown
+    expect(guesserView({})).toBeNull(); // default: hidden
     expect(guesserView({ showCategory: false })).toBeNull();
     expect(guesserView({ showCategory: true })).not.toBeNull();
     expect(guesserView({ category: "animals", showCategory: false })).toBe("Animals");
