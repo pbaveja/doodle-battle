@@ -780,6 +780,15 @@ export class RoomCore {
     return [...this.players.values()].filter((p) => this.isActive(p)).sort((a, b) => a.seat - b.seat);
   }
 
+  /** Drawing order is random each round, so the host doesn't always go first. */
+  private shuffled<T>(xs: T[]): T[] {
+    for (let i = xs.length - 1; i > 0; i--) {
+      const j = Math.floor(this.io.random() * (i + 1));
+      [xs[i], xs[j]] = [xs[j], xs[i]];
+    }
+    return xs;
+  }
+
   private connectedCount() {
     let n = 0;
     for (const p of this.players.values()) if (this.isActive(p)) n++;
@@ -799,7 +808,7 @@ export class RoomCore {
     this.results = null;
     if (this.galleryTurns.length) this.io.remove(this.galleryTurns.map((t) => `gal:${t}`));
     this.galleryTurns = [];
-    this.queue = ready.map((p) => p.id);
+    this.queue = this.shuffled(ready.map((p) => p.id));
     this.roundDrawn.clear();
     this.turn = null;
     this.nextTurn(now, true);
@@ -822,7 +831,7 @@ export class RoomCore {
       this.round++;
       first = true;
       this.roundDrawn.clear();
-      this.queue = this.connectedPlayers().map((p) => p.id);
+      this.queue = this.shuffled(this.connectedPlayers().map((p) => p.id));
       if (!this.queue.length) break;
     }
     if (!drawer || this.connectedCount() < 2) {
