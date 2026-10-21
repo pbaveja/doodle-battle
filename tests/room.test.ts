@@ -492,6 +492,22 @@ describe("disconnects and recovery", () => {
     h.advance(TIMING.emptyTtlMs + TIMING.seatHoldLobbyMs + 1000);
     expect(h.core.exists()).toBe(false);
   });
+
+  test("a room everyone left is cleaned up even when it's reloaded from storage at every wake", async () => {
+    const h = lobby(1);
+    h.send("c1", { t: "leave" }); // saved while the socket is still open
+    await h.flushMicro(); // then the socket closes
+    // The idle room is evicted, and each alarm loads a fresh copy from storage.
+    for (let i = 0; i < 5 && h.storage.has("state"); i++) {
+      expect(h.durable).not.toBeNull();
+      h.t = h.durable!;
+      h.core = new RoomCore(h.io());
+      h.core.restore(h.storage.get("state") as never, h.storage.get("canvas") as never);
+      h.core.onAlarm();
+    }
+    expect(h.storage.has("state")).toBe(false);
+    expect(h.core.exists()).toBe(false);
+  });
 });
 
 describe("stepping away (app in the background)", () => {

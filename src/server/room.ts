@@ -304,7 +304,8 @@ export class RoomCore {
     this.kicked = new Set(snap.kicked);
     this.chat = snap.chat;
     this.chatId = snap.chatId;
-    this.emptySince = snap.emptySince ?? now;
+    // Older saves have none; with null, step() starts the countdown and saves it.
+    this.emptySince = snap.emptySince ?? null;
     this.results = snap.results;
     this.galleryTurns = snap.galleryTurns ?? [];
     this.photoSeq = snap.photoSeq ?? 0;
@@ -402,7 +403,7 @@ export class RoomCore {
         this.markView(true);
       }
     }
-    if (this.conns.size === 0) this.emptySince ??= now;
+    if (this.conns.size === 0) this.markEmpty(now);
   }
 
   onAlarm() {
@@ -1182,8 +1183,8 @@ export class RoomCore {
     }
 
     if (this.conns.size === 0) {
-      this.emptySince ??= now;
-      if (now - this.emptySince >= this.timing.emptyTtlMs) {
+      this.markEmpty(now);
+      if (now - this.emptySince! >= this.timing.emptyTtlMs) {
         this.report("closed", now);
         this.destroyed = true;
         this.io.destroy();
@@ -1191,6 +1192,16 @@ export class RoomCore {
       }
     }
     return false;
+  }
+
+  /**
+   * Start the empty-room countdown and save it. A room is often evicted and reloaded from storage
+   * while it waits, and a countdown kept only in memory would start over at every wake.
+   */
+  private markEmpty(now: number) {
+    if (this.emptySince !== null) return;
+    this.emptySince = now;
+    if (this.exists()) this.stateDirty = this.stateUrgent = true;
   }
 
   private nextWake(now: number): { at: number | null; durable: number | null } {
