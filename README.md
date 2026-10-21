@@ -71,9 +71,9 @@ same Wi-Fi, use your computer's local IP instead of `localhost`.
 - **One address.** The same Worker serves the website (`public/`) and the game (`/api`, `/ws`).
   No database, no accounts.
 - **Live drawing.** The drawer sees their own lines instantly. Points go out in batches about
-  every 200 ms on a shared 1200×900 canvas, so every device shows the same picture at its own
-  size. Viewers play each batch as it arrives, spread over the next 200 ms, so lines flow
-  smoothly about a fifth of a second behind the drawer.
+  every 500 ms on a shared 1200×900 canvas, so every device shows the same picture at its own
+  size. Viewers play each batch as it arrives, spread over the next 500 ms, so lines flow
+  smoothly about half a second behind the drawer.
 - **Same countdown everywhere.** The server sends one end time per phase. Each device measures
   its clock offset from the server with a couple of pings when it connects, so timers match
   without per-second messages.
@@ -156,7 +156,7 @@ each player earned and slides everyone into their new position.
 Cloudflare's free plan allows, each day, 100,000 Durable Object requests, 13,000 GB-seconds of
 room time and 100,000 rows written to storage. Messages sent out to players are free, incoming ones
 count 20 to a request, and heartbeats are answered without waking the room, so a full 8-player game
-uses roughly 250 requests. Room time runs out first: a room stays awake for the whole game, which
+uses roughly 120 requests. Room time runs out first: a room stays awake for the whole game, which
 works out to roughly 50 full 8-player games a day (more for shorter games). A quiet lobby sleeps
 between messages. Limits reset at 00:00 UTC. The $5/month Workers Paid plan removes this
 ceiling if you ever need it.

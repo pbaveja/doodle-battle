@@ -165,12 +165,12 @@ export type Tool = "brush" | "fill" | "eraser";
 type Queued = { due: number; op: Op } | { due: number; pts: [number, number]; last: boolean };
 
 /** The drawer sends new points this often; viewers spread each batch over the same time. */
-const BATCH_MS = 200;
+const BATCH_MS = 500;
 /**
  * Batches held up by a network hiccup arrive together and queue up behind each other. A viewer
  * with more than this still to play skips ahead and catches up.
  */
-const MAX_LAG_MS = 650;
+const MAX_LAG_MS = 1600;
 
 export class Board {
   readonly canvas: HTMLCanvasElement;
