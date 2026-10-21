@@ -4,6 +4,7 @@ import { app, inviteLink, isHost, me, send, toast } from "../app";
 import { avatarHtml } from "../avatar";
 import { mountChat } from "../chat";
 import { commitPhoto } from "../roomphoto";
+import { voiceMark } from "../voiceui";
 import { mountProfile, profileName, renderProfile } from "../profile";
 import { $, $$, copyText, esc } from "../util";
 
@@ -62,6 +63,17 @@ export function initLobby(onLeave: () => void) {
   $<HTMLInputElement>("#showCategory").addEventListener("change", (e) => {
     if (!isHost()) return;
     send({ t: "settings", s: { showCategory: (e.target as HTMLInputElement).checked } });
+  });
+  $("#voiceSeg").addEventListener("click", (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>("button");
+    if (!b || !isHost()) return;
+    send({ t: "settings", s: { voice: b.dataset.v as Settings["voice"] } });
+  });
+  const info = $("#voiceInfoBtn");
+  info.addEventListener("click", () => {
+    const box = $("#voiceInfo");
+    box.hidden = !box.hidden;
+    info.setAttribute("aria-expanded", String(!box.hidden));
   });
   $<HTMLInputElement>("#photosOn").addEventListener("change", (e) => {
     if (!isHost()) return;
@@ -127,9 +139,9 @@ export function renderLobby(v: View) {
     .map((p) => {
       const mine = p.id === v.you;
       const status = p.away && !mine ? "Away" : mine ? "You" : p.id === v.host ? "Host" : "Ready";
-      return `<li class="prow${mine ? " me" : ""}${p.away && !mine ? " off" : ""}" style="--pc:${INKS[p.color]}">
+      return `<li class="prow${mine ? " me" : ""}${p.away && !mine ? " off" : ""}" data-id="${esc(p.id)}" style="--pc:${INKS[p.color]}">
         ${avatarHtml(p, 36)}
-        <div><span class="pname"><span>${esc(p.name)}</span>${p.id === v.host ? CROWN : ""}</span><span class="pmeta">${status}</span></div>
+        <div><span class="pname"><span>${esc(p.name)}</span>${p.id === v.host ? CROWN : ""}${voiceMark(p)}</span><span class="pmeta">${status}</span></div>
         <div class="pside">${host && !mine ? `<button type="button" class="kick" data-pid="${esc(p.id)}">Remove</button>` : ""}</div>
       </li>`;
     })
@@ -171,6 +183,10 @@ export function renderLobby(v: View) {
   custom.readOnly = !host;
   if (document.activeElement !== custom) custom.value = s.customWords;
   custom.placeholder = host ? "office party, our dog Max, beach trip" : "No custom words";
+  for (const b of $$("button", $("#voiceSeg"))) {
+    b.setAttribute("aria-checked", String(b.dataset.v === (s.voice ?? "off")));
+    b.tabIndex = host ? 0 : -1;
+  }
   const photos = $<HTMLInputElement>("#photosOn");
   photos.checked = s.photos !== false;
   photos.disabled = !host;
