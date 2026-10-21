@@ -108,6 +108,33 @@ export function isTypoOf(g: string, w: string): boolean {
   return editDistance(g, w, allowed) <= allowed;
 }
 
+/** The answer's words, normalized: "The Hat-Stand" gives ["hat", "stand"]. */
+function answerWords(word: string): string[] {
+  return word.toLocaleLowerCase().trim().replace(ARTICLE, "").split(/[\s-]+/).map(normalizeGuess).filter(Boolean);
+}
+
+/** One answer word: short words allow only swapped letters, longer ones a slip or two. */
+function wordSlip(g: string, w: string): boolean {
+  if (g === w) return true;
+  const n = Array.from(w).length;
+  if (n <= 3) return isTypoOf(g, w);
+  const allowed = n <= 7 ? 1 : 2;
+  return editDistance(g, w, allowed) <= allowed;
+}
+
+/**
+ * A multi-word answer's typo allowance must not be spent on one short word: "man stand" is not
+ * "hat stand". The guess (spaces ignored) has to split into pieces that each slip on one word.
+ */
+function slipsPerWord(g: string, words: string[]): boolean {
+  if (words.length === 1) return wordSlip(g, words[0]);
+  const G = Array.from(g);
+  for (let i = 1; i < G.length; i++) {
+    if (wordSlip(G.slice(0, i).join(""), words[0]) && slipsPerWord(G.slice(i).join(""), words.slice(1))) return true;
+  }
+  return false;
+}
+
 export interface GuessTarget {
   word: string;
   very?: string[];
@@ -130,7 +157,10 @@ export function judgeGuess(guess: string, t: GuessTarget, otherWords?: { has(key
   if (g === w || samePlural(g, w)) return { kind: "correct" };
   const known = !!otherWords?.has(g);
   const wl = Array.from(w).length, gl = Array.from(g).length;
-  if (!known && isTypoOf(g, w)) return { kind: "correct", typo: true };
+  if (!known && isTypoOf(g, w)) {
+    const words = answerWords(t.word);
+    if (words.length < 2 || words.join("") !== w || slipsPerWord(g, words)) return { kind: "correct", typo: true };
+  }
 
   const matches = (term: string) => {
     const n = normalizeGuess(term);
