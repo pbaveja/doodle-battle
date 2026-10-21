@@ -203,6 +203,25 @@ describe("Durable Object wrapper", () => {
     expect(Math.abs(f.getAlarm()! - (left + TIMING.seatHoldLobbyMs))).toBeLessThan(1000);
   });
 
+  test("a room that doesn't exist never sets an alarm, and clears one left from before", async () => {
+    const f = fakeCtx();
+    const room: any = new Room(f.ctx as any, {} as any);
+    await tick();
+    const info = await (await room.fetch(new Request("https://room/info"))).json();
+    expect(info.exists).toBe(false);
+    await tick();
+    expect(f.getAlarm()).toBeNull();
+    expect([...f.data.keys()]).toEqual([]);
+
+    // A room left re-arming itself every emptyTtlMs stops at its next alarm.
+    await f.ctx.storage.setAlarm(Date.now());
+    const woken: any = new Room(f.ctx as any, {} as any);
+    await tick();
+    woken.alarm();
+    await tick();
+    expect(f.getAlarm()).toBeNull();
+  });
+
   test("the per-game tally counts lookups, connects, alarms and closes", async () => {
     const f = fakeCtx();
     const room: any = new Room(f.ctx as any, {} as any);

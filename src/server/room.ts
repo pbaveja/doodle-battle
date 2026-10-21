@@ -1194,6 +1194,9 @@ export class RoomCore {
   }
 
   private nextWake(now: number): { at: number | null; durable: number | null } {
+    // A room that was never claimed (or was closed) has nothing to save, so its empty-room countdown
+    // restarts on every wake. Asking for one would re-arm the alarm every emptyTtlMs, forever.
+    if (!this.exists() && this.conns.size === 0) return { at: null, durable: null };
     const times: number[] = [];
     const add = (n: number | null | undefined) => {
       if (typeof n === "number" && Number.isFinite(n)) times.push(n);
