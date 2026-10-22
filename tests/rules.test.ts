@@ -32,6 +32,27 @@ describe("guess matching", () => {
     expect(j("cat", "car")).not.toBe("correct");
     expect(judgeGuess("goat", { word: "boat" }, { has: (k) => k === "goat" }).kind).toBeNull();
   });
+  test("multi-word answers judge each word's slips on its own", () => {
+    const j = (g: string, w: string) => judgeGuess(g, { word: w }).kind;
+    // A short word cannot be swapped out using the whole phrase's allowance.
+    expect(j("man stand", "hat stand")).not.toBe("correct");
+    expect(j("manstand", "hat stand")).not.toBe("correct");
+    expect(j("cat stand", "hat stand")).not.toBe("correct");
+    expect(j("hot stand", "hat stand")).not.toBe("correct");
+    expect(j("key rang", "key ring")).toBe("correct");
+    expect(j("tea cozy", "tea cosy")).toBe("correct");
+    expect(j("plate mat", "place mat")).toBe("correct");
+    expect(j("place map", "place mat")).not.toBe("correct");
+    // Real slips still count, with or without the space.
+    expect(j("hat stnad", "hat stand")).toBe("correct");
+    expect(j("hta stand", "hat stand")).toBe("correct");
+    expect(j("hatstnd", "hat stand")).toBe("correct");
+    expect(j("hatt stand", "hat stand")).toBe("correct");
+    expect(j("coat rakc", "coat rack")).toBe("correct");
+    expect(j("lion kng", "The Lion King")).toBe("correct");
+    // A rejected slip still gets a nudge.
+    expect(j("man stand", "hat stand")).toBe("very");
+  });
   test("meaning-based nudges", () => {
     const dog = { word: "dog", very: ["puppy", "hound"], close: ["bone", "leash"] };
     expect(judgeGuess("puppy", dog).kind).toBe("very");
