@@ -199,6 +199,11 @@ export class Board {
   private last: [number, number] | null = null;
   private lastPen = 0;
   private points = 0;
+  /** Where the drawer's pointer input comes from: the canvas itself, or a drawing pad that mirrors it. */
+  private surface: HTMLElement;
+  private bound = new Set<HTMLElement>();
+  /** Goes up whenever the picture changes, so a mirror knows when to redraw. */
+  paints = 0;
 
   constructor(canvas: HTMLCanvasElement, private cursor?: HTMLElement) {
     this.canvas = canvas;
@@ -206,7 +211,21 @@ export class Board {
     canvas.height = H;
     this.ctx = canvas.getContext("2d", { willReadFrequently: true })!;
     this.clearPaper();
-    this.bindInput();
+    this.surface = canvas;
+    this.bindInput(canvas);
+  }
+
+  /**
+   * Take drawing input from another element with the canvas's proportions (null for the canvas
+   * itself). The canvas then ignores touches, so a sleeve brushing the big screen draws nothing.
+   */
+  setSurface(el: HTMLElement | null) {
+    const next = el ?? this.canvas;
+    if (next === this.surface) return;
+    this.cancelInput();
+    this.surface = next;
+    if (this.cursor) this.cursor.hidden = true;
+    if (!this.bound.has(next)) this.bindInput(next);
   }
 
   private clearPaper() {
@@ -225,6 +244,7 @@ export class Board {
     this.points = 0;
     for (const it of this.items) if (it.k === "s") this.points += it.p.length / 2;
     renderItems(this.ctx, this.items);
+    this.paints++;
     this.onChange();
   }
 
@@ -298,6 +318,7 @@ export class Board {
     }
     last.p.push(q.pts[0], q.pts[1]);
     drawSegment(this.ctx, last, last.p.length / 2 - 1);
+    this.paints++;
     if (q.last) this.v++;
   }
 
@@ -334,6 +355,7 @@ export class Board {
         this.clearPaper();
         break;
     }
+    this.paints++;
     this.onChange();
   }
 
@@ -392,7 +414,7 @@ export class Board {
   }
 
   private toCanvas(e: PointerEvent): [number, number] {
-    const r = this.canvas.getBoundingClientRect();
+    const r = this.surface.getBoundingClientRect();
     const x = Math.round(((e.clientX - r.left) * W) / r.width);
     const y = Math.round(((e.clientY - r.top) * H) / r.height);
     return [Math.max(-100, Math.min(W + 100, x)), Math.max(-100, Math.min(H + 100, y))];
@@ -405,7 +427,7 @@ export class Board {
 
   private endStroke() {
     if (this.activeId === null) return;
-    try { this.canvas.releasePointerCapture(this.activeId); } catch { /* ignore */ }
+    try { this.surface.releasePointerCapture(this.activeId); } catch { /* ignore */ }
     this.activeId = null;
     this.last = null;
     this.local({ k: "e" });
@@ -418,9 +440,10 @@ export class Board {
     this.flushOutbox();
   }
 
-  private bindInput() {
-    const c = this.canvas;
+  private bindInput(c: HTMLElement) {
+    this.bound.add(c);
     c.addEventListener("pointerdown", (e) => {
+      if (c !== this.surface) return;
       if (e.pointerType === "pen") this.lastPen = performance.now();
       if (!this.enabled || this.activeId !== null) return;
       if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -441,6 +464,7 @@ export class Board {
       this.local({ k: "b", c: this.tool === "eraser" ? -1 : this.color, w: this.brushWidth(), x, y });
     });
     c.addEventListener("pointermove", (e) => {
+      if (c !== this.surface) return;
       this.moveCursor(e);
       if (e.pointerId !== this.activeId) return;
       e.preventDefault();
@@ -460,23 +484,24 @@ export class Board {
         this.pending.push(p[0], p[1]);
         this.points++;
         drawSegment(this.ctx, s, s.p.length / 2 - 1);
+        this.paints++;
       }
     });
     const up = (e: PointerEvent) => {
-      if (e.pointerId === this.activeId) this.endStroke();
+      if (c === this.surface && e.pointerId === this.activeId) this.endStroke();
     };
     c.addEventListener("pointerup", up);
     c.addEventListener("pointercancel", up);
     c.addEventListener("lostpointercapture", up);
     c.addEventListener("pointerleave", () => this.cursor && (this.cursor.hidden = true));
     c.addEventListener("contextmenu", (e) => e.preventDefault());
-    c.addEventListener("touchmove", (e) => { if (this.enabled) e.preventDefault(); }, { passive: false });
+    c.addEventListener("touchmove", (e) => { if (this.enabled && c === this.surface) e.preventDefault(); }, { passive: false });
   }
 
   private moveCursor(e: PointerEvent) {
     const cur = this.cursor;
     if (!cur) return;
-    if (!this.enabled || e.pointerType === "touch" || this.tool === "fill") {
+    if (!this.enabled || e.pointerType === "touch" || this.tool === "fill" || this.surface !== this.canvas) {
       cur.hidden = true;
       return;
     }

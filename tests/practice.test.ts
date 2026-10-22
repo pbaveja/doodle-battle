@@ -18,7 +18,7 @@ function seeded(seed: number) {
 describe("practice settings", () => {
   test("defaults and validation", () => {
     expect(sanitizePractice(null)).toEqual(DEFAULT_PRACTICE);
-    expect(sanitizePractice({ category: "movies", difficulty: "hard", drawTime: 0, words: 0 })).toEqual({ category: "movies", difficulty: "hard", drawTime: 0, words: 0 });
+    expect(sanitizePractice({ category: "movies", difficulty: "hard", drawTime: 0, words: 0 })).toEqual({ category: "movies", difficulty: "hard", grade: 8, drawTime: 0, words: 0 });
     expect(sanitizePractice({ category: "nope", difficulty: "insane", drawTime: 7, words: 99 })).toEqual(DEFAULT_PRACTICE);
   });
 });

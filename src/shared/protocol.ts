@@ -1,5 +1,7 @@
 // Shared types and constants for the Doodle Battle client and room server.
 
+import { DEFAULT_GRADE, type Edition } from "./students";
+
 export const PROTOCOL = 3;
 
 /** Every device draws on the same logical canvas, scaled to its screen. */
@@ -21,13 +23,19 @@ export interface Settings {
   difficulty: Difficulty;
   customWords: string;
   customOnly: boolean;
-  /** "all" or a category id from categories.ts */
+  /** "all" or a category id from categories.ts (a subject from students.ts in the student edition) */
   category: string;
   /** Show guessers the word's category. A specific category (not "all") is always shown. */
   showCategory: boolean;
   /** Players may use a photo of themselves. When off, photos aren't sent or kept at all. */
   photos: boolean;
   voice: VoiceMode;
+  /** Which word list the room uses. Set when the room is created, from the address it was made on. */
+  edition: Edition;
+  /** Student edition: the class (7 to 12) that sets the words, in place of the difficulty. */
+  grade: number;
+  /** Classroom battle: each player is a whole class on its own smartboard, and can pair phones. */
+  classroom: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -42,6 +50,9 @@ export const DEFAULT_SETTINGS: Settings = {
   showCategory: false,
   photos: true,
   voice: "on",
+  edition: "main",
+  grade: DEFAULT_GRADE,
+  classroom: false,
 };
 
 export const LIMITS = {
@@ -161,6 +172,8 @@ export interface PlayerView {
   photo: number;
   /** Connected and in the room's voice chat. */
   voice: boolean;
+  /** Phones paired with this player's seat. */
+  phones: number;
 }
 
 export interface TurnScore {
@@ -209,6 +222,8 @@ export interface View {
   reason: EndReason | null;
   results: Result[] | null;
   firstInRound: boolean;
+  /** The code a phone scans to pair with your seat, once you've asked for one. */
+  pair: string | null;
   now: number;
 }
 
@@ -233,6 +248,8 @@ export const HEARTBEAT = '{"t":"hb"}';
 
 export type ClientMsg =
   | { t: "hello"; v: number; pid: string; secret: string; name: string; color: number; face: number }
+  /** A phone joining a player's seat with their pairing code. */
+  | { t: "hello"; v: number; pair: string }
   | { t: "ping"; c: number }
   | { t: "hb" }
   | { t: "profile"; name: string; color: number; face: number }
@@ -255,7 +272,9 @@ export type ClientMsg =
   /** Join or leave the voice chat. */
   | { t: "voice"; on: boolean }
   /** A voice handshake for one other player, passed on by the room as is. */
-  | { t: "rtc"; to: string; d: string };
+  | { t: "rtc"; to: string; d: string }
+  /** Make a pairing code for your seat. With reset, a new one, which unpairs your phones. */
+  | { t: "pair"; reset?: boolean };
 
 export type ErrCode =
   | "not_found"
@@ -282,7 +301,7 @@ export interface GalleryEntry {
 }
 
 export type ServerMsg =
-  | { t: "welcome"; you: string; code: string }
+  | { t: "welcome"; you: string; code: string; phone?: boolean }
   | { t: "state"; s: View }
   | { t: "canvas"; turn: number; v: number; items: Item[] }
   | { t: "draw"; v: number; ops: Op[] }

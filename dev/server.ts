@@ -3,6 +3,7 @@
 
 import { CODE_RE, HEARTBEAT, TIMING, type Timing } from "../src/shared/protocol";
 import { randomCode } from "../src/shared/rules";
+import { parseEdition } from "../src/shared/students";
 import { RoomCore, type RoomIO, type StoredPhoto } from "../src/server/room";
 import { wordsResponse } from "../src/server/words-api";
 import { join, normalize } from "node:path";
@@ -50,7 +51,10 @@ function getRoom(code: string): DevRoom {
       if (ws) later(() => { try { ws.close(code, reason); } catch { /* closed */ } });
       queueMicrotask(() => room.core.onClose(cid));
     },
-    bind: () => {},
+    bind: (cid, pid, phone) => {
+      const ws = room.sockets.get(cid);
+      if (ws) Object.assign(ws.data, { pid: pid ?? undefined, phone });
+    },
     schedule: (at) => {
       if (room.timer) clearTimeout(room.timer);
       room.timer = null;
@@ -89,7 +93,10 @@ function restartRoom(code: string) {
   const photos = new Map<string, StoredPhoto>();
   for (const [k, v] of old.storage) if (k.startsWith("photo:")) photos.set(k.slice(6), v as StoredPhoto);
   fresh.core.restore(old.storage.get("state") as never, old.storage.get("canvas") as never, photos);
-  for (const [cid, ws] of fresh.sockets) fresh.core.rebind(cid, (ws.data as { pid?: string }).pid ?? null);
+  for (const [cid, ws] of fresh.sockets) {
+    const d = ws.data as { pid?: string; phone?: boolean };
+    fresh.core.rebind(cid, d.pid ?? null, !!d.phone);
+  }
   fresh.core.onAlarm();
   return true;
 }
@@ -119,11 +126,11 @@ const server = Bun.serve<{ code: string; cid: string; pid?: string }, never>({
     if (path === "/api/rooms" && req.method === "POST") {
       for (let i = 0; i < 6; i++) {
         const code = randomCode(Math.random);
-        if (getRoom(code).core.claim(code)) return json({ code });
+        if (getRoom(code).core.claim(code, parseEdition(url.searchParams.get("edition")))) return json({ code });
       }
       return json({ error: "busy" }, 503);
     }
-    if (path === "/api/words") return later2(wordsResponse());
+    if (path === "/api/words") return later2(wordsResponse(parseEdition(url.searchParams.get("edition"))));
     const info = path.match(/^\/api\/rooms\/([A-Za-z0-9]{5})$/);
     if (info) {
       const code = info[1].toUpperCase();
