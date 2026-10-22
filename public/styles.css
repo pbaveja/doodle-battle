@@ -326,7 +326,7 @@ textarea:focus { box-shadow: inset 0 0 0 2px var(--you); }
   gap: 12px 14px;
   padding-bottom: 14px;
 }
-.gbar { grid-area: bar; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 12px; padding-top: 10px; min-height: 58px; }
+.gbar { grid-area: bar; display: grid; grid-template-columns: minmax(max-content, 1fr) auto minmax(max-content, 1fr); align-items: center; gap: 12px; padding-top: 10px; min-height: 58px; }
 .gbar-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .gbar-right { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .roundlabel { font: 700 13px/1.2 var(--body); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
@@ -591,6 +591,50 @@ textarea:focus { box-shadow: inset 0 0 0 2px var(--you); }
   .cam-actions .btn { flex: 1 1 100%; }
 }
 
+/* ---------- voice chat ---------- */
+.voice { position: relative; flex: none; }
+.vctl { display: flex; align-items: center; gap: 2px; }
+.vbtn {
+  appearance: none; border: 0; position: relative; height: 42px; min-width: 42px; padding: 0 12px; border-radius: 12px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; font: 700 14px/1 var(--body);
+  background: transparent; color: var(--ink); box-shadow: inset 0 0 0 2px var(--line); touch-action: manipulation;
+  transition: background-color .15s, box-shadow .15s, color .15s;
+}
+.vbtn:hover { box-shadow: inset 0 0 0 2px var(--muted); }
+.vbtn.on, .vbtn.asking { padding: 0; width: 42px; background: var(--you); color: var(--on-you); box-shadow: none; }
+.vbtn.asking { animation: vwait 1s ease-in-out infinite alternate; }
+.vbtn.on.talking { box-shadow: 0 0 0 2px var(--table), 0 0 0 4.5px var(--you); }
+.vbtn.muted { padding: 0; width: 42px; background: var(--warn-bg); color: var(--warn); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--warn) 45%, transparent); }
+.vbtn.none { padding: 0; width: 42px; background: var(--line-soft); box-shadow: none; }
+/* Some players can't hear you right now (see the menu for why). */
+.vhush { position: absolute; top: -3px; right: -3px; width: 12px; height: 12px; border-radius: 50%; background: var(--m-gold); box-shadow: 0 0 0 2px var(--table); }
+.vmore { appearance: none; border: 0; width: 26px; height: 42px; border-radius: 10px; display: grid; place-items: center; background: transparent; color: var(--muted); touch-action: manipulation; }
+.vmore:hover, .vmore[aria-expanded="true"] { background: var(--line-soft); color: var(--ink); }
+.vmenu { width: 300px; max-width: calc(100vw - var(--gutter-l) - var(--gutter-r)); max-height: min(70vh, 520px); overflow-y: auto; overscroll-behavior: contain; }
+.vnote { padding: 0 12px 8px; font-size: 13px; color: var(--muted); }
+.vpeople { list-style: none; margin: 0; padding: 0 0 4px; display: grid; gap: 2px; }
+.vrow { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 5px 4px 5px 10px; border-radius: 10px; }
+.vrow .face { display: block; }
+.vname { min-width: 0; display: grid; }
+.vname b { color: var(--pc-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vname small { font-size: 12px; font-weight: 600; color: var(--muted); }
+.vmark { display: inline-flex; flex: none; color: var(--muted); }
+.vmark .slash { display: none; }
+/* Keep names, the crown and the mic clear of the badge on the right. */
+.game-players .prow:has(.badge) { padding-right: 42px; }
+@keyframes vpulse { to { box-shadow: 0 0 0 2px var(--raise), 0 0 0 3px var(--pc, var(--good)); } }
+@keyframes vwait { to { opacity: .55; } }
+.labelrow { display: flex; align-items: center; gap: 4px; min-height: 28px; margin-block: -4px; }
+.infobtn { appearance: none; border: 0; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: transparent; color: var(--muted); touch-action: manipulation; }
+.infobtn:hover, .infobtn[aria-expanded="true"] { background: var(--line-soft); color: var(--ink); }
+.infobox { background: var(--raise); border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line-soft); padding: 12px 14px; font-size: 14px; line-height: 1.45; color: var(--muted); display: grid; gap: 8px; animation: rise .15s ease-out; }
+.infobox p, .infobox dl { margin: 0; }
+.infobox b, .infobox dt { color: var(--ink); font-weight: 700; }
+.infobox dd { margin: 0 0 6px; }
+.infobox dd:last-child { margin-bottom: 0; }
+.seg.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.seg button { line-height: 1.15; }
+
 /* player colour text: lighter in dark mode so names stay readable */
 [style*="--pc"] { --pc-text: var(--pc); }
 @media (prefers-color-scheme: dark) {
@@ -800,6 +844,31 @@ textarea:focus { box-shadow: inset 0 0 0 2px var(--you); }
   .toolrow { gap: 4px; }
   .toolgroup { padding: 2px; gap: 1px; }
   .tool, .tool.wide { width: 30px; }
+}
+
+/* Voice chat on phones: the button is icon-only, and the menu spans the screen under the bar. */
+@media (max-width: 699px) {
+  .vlabel { display: none; }
+  .vbtn { padding: 0; width: 42px; }
+  .vmenu { position: fixed; left: var(--gutter-l); right: var(--gutter-r); top: calc(env(safe-area-inset-top, 0px) + 56px); width: auto; max-width: none; max-height: calc(var(--app-h) - 72px); }
+  .seg.three button { font-size: 14px; }
+  .game-players .prow:has(.badge) { padding-right: 8px; }
+  /* Typing a guess: the header is one tight line, so only the mute button stays. */
+  body.kb .game .vmore { display: none; }
+}
+/* Narrow phones: a slightly smaller title and tighter buttons, so the top bar stays on one line with voice. */
+@media (max-width: 479px) {
+  .topbar .brand { font-size: 18px; }
+  .topbar-actions { gap: 4px; }
+  .topbar .btn.small { padding: 0 10px; }
+  .vctl { gap: 0; }
+  .vmore { width: 22px; }
+}
+@media (max-width: 359px) {
+  .topbar .brand { font-size: 17px; }
+}
+@media (max-width: 699px) and (max-height: 520px) {
+  .vmenu { top: calc(env(safe-area-inset-top, 0px) + 48px); max-height: calc(var(--app-h) - 60px); }
 }
 
 @media (prefers-reduced-motion: reduce) {

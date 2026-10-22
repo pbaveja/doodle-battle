@@ -65,6 +65,8 @@ interface Player {
   awaySince?: number | null;
   /** Version of the player's photo (0 or missing: none). The image itself lives in `photos`. */
   photo?: number;
+  /** In the voice chat. Each new connection starts outside it; the page joins again if it's still in. */
+  voice?: boolean;
 }
 
 interface Turn {
@@ -95,6 +97,8 @@ interface Conn {
   drawCount: number;
   /** Times of recent photo uploads, for rate limiting. */
   photo: number[];
+  /** Times of recent voice handshakes passed on, for rate limiting. */
+  rtc: number[];
 }
 
 type Vis = "all" | string[];
@@ -162,7 +166,7 @@ const newTally = (since: number): Tally => ({ since, types: {}, connects: 0, clo
 const CLIENT_TYPES: Record<ClientMsg["t"], true> = {
   hello: true, ping: true, hb: true, profile: true, settings: true, start: true, choose: true,
   draw: true, sync: true, chat: true, kick: true, leave: true, end: true, skip: true, away: true,
-  back: true, lobby: true, drawing: true, photo: true,
+  back: true, lobby: true, drawing: true, photo: true, voice: true, rtc: true,
 };
 
 /** A player's photo. Stored under its own key (`photo:<pid>`) so the frequent state saves stay small. */
@@ -331,7 +335,7 @@ export class RoomCore {
   /** Re-attach a live socket after the room was reloaded from storage. */
   rebind(cid: string, pid: string | null) {
     const now = this.io.now();
-    this.conns.set(cid, { pid, opened: now, seen: now, chat: [], drawWindow: 0, drawCount: 0, photo: [] });
+    this.conns.set(cid, { pid, opened: now, seen: now, chat: [], drawWindow: 0, drawCount: 0, photo: [], rtc: [] });
     if (!pid) return;
     const p = this.players.get(pid);
     if (p) {
@@ -378,7 +382,7 @@ export class RoomCore {
   onOpen(cid: string) {
     const now = this.io.now();
     this.tally.connects++;
-    this.conns.set(cid, { pid: null, opened: now, seen: now, chat: [], drawWindow: 0, drawCount: 0, photo: [] });
+    this.conns.set(cid, { pid: null, opened: now, seen: now, chat: [], drawWindow: 0, drawCount: 0, photo: [], rtc: [] });
     this.emptySince = null;
     this.flush();
   }
@@ -490,10 +494,17 @@ export class RoomCore {
         this.settings = sanitizeSettings(m.s, this.settings, this.players.size);
         // Turning photos off deletes them; players send them again if it's turned back on.
         if (!this.settings.photos && this.photos.size) this.clearPhotos();
+        if (this.settings.voice === "off") for (const o of this.players.values()) o.voice = false;
         this.markView(false);
         break;
       case "photo":
         this.onPhoto(cid, conn, p, m.data, now);
+        break;
+      case "voice":
+        this.onVoice(p, m.on);
+        break;
+      case "rtc":
+        this.onRtc(conn, p, m, now);
         break;
       case "start":
         if (!this.requireHost(cid, p)) break;
@@ -577,6 +588,7 @@ export class RoomCore {
       p.leftAt = null;
       p.away = false;
       p.awaySince = null;
+      p.voice = false;
       if (since !== null && now - since > 20_000) this.sys(`${p.name} is back.`);
     } else {
       const name = sanitizeName(m.name);
@@ -694,6 +706,29 @@ export class RoomCore {
   private clearPhotos() {
     for (const p of this.players.values()) if (p.photo || this.photos.has(p.id)) this.dropPhoto(p);
     this.photos.clear();
+  }
+
+  /* =================== voice =================== */
+
+  private onVoice(p: Player, on: unknown) {
+    const voice = on === true && this.settings.voice !== "off";
+    if (!!p.voice === voice) return;
+    p.voice = voice;
+    this.markView(false);
+  }
+
+  /**
+   * Pass a voice handshake to one other player. Nothing is kept, and it only goes between two
+   * players who are both in the voice chat. The audio itself never comes through the room.
+   */
+  private onRtc(conn: Conn, p: Player, m: Record<string, unknown>, now: number) {
+    const to = typeof m.to === "string" ? this.players.get(m.to) : undefined;
+    if (!to?.cid || to === p || !p.voice || !to.voice) return;
+    if (typeof m.d !== "string" || m.d.length > LIMITS.rtcMaxChars) return;
+    conn.rtc = conn.rtc.filter((at) => now - at < LIMITS.rtcWindowMs);
+    if (conn.rtc.length >= LIMITS.rtcBurst) return;
+    conn.rtc.push(now);
+    this.sendTo(to.cid, { t: "rtc", from: p.id, d: m.d });
   }
 
   private onKick(host: Player, target: unknown, now: number) {
@@ -1397,6 +1432,7 @@ export class RoomCore {
       .map((p) => ({
         id: p.id, name: p.name, color: p.color, face: p.face, score: p.score, connected: !!p.cid, away: !this.isActive(p),
         photo: this.settings.photos && this.photos.has(p.id) ? p.photo ?? 0 : 0,
+        voice: !!p.voice && !!p.cid,
       }));
     const inLobby = this.phase === "lobby" || this.phase === "over";
     return {

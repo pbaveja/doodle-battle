@@ -13,6 +13,8 @@ import { initCamera } from "./camera";
 import { clearRoomPhotos, putPhoto, restoreMyPhoto } from "./photos";
 import { commitPhoto, notePhoto, resetPhotoSync, syncPhoto } from "./roomphoto";
 import { sfx, sound, unlock } from "./sound";
+import { onRtc, resetVoice, syncVoice, voice, voiceWelcome } from "./voice";
+import { initVoiceUi, mountVoice, renderVoice } from "./voiceui";
 import { $, $$, store } from "./util";
 
 type ScreenId = "home" | "join" | "notice" | "connecting" | "lobby" | "game" | "over" | "practice" | "practiceDone";
@@ -72,6 +74,7 @@ function show(id: ScreenId) {
   scr.scrollTop = 0;
   const f = scr.querySelector<HTMLElement>("[data-focus]");
   if (f && !matchMedia("(pointer: coarse)").matches) f.focus({ preventScroll: true });
+  if (id === "lobby" || id === "game" || id === "over") mountVoice(`#${id}Voice`);
   if (id !== "game") {
     stopGameTimers();
     releaseWake();
@@ -113,6 +116,8 @@ function disconnect(sendLeave = false) {
   app.code = "";
   app.gallery.clear();
   clearRoomPhotos();
+  resetVoice();
+  renderVoice();
   resetOver();
   hideBanner();
   setYouColor(app.profile.color);
@@ -328,6 +333,7 @@ function onMessage(m: ServerMsg) {
       app.synced = false;
       app.conn?.markReady();
       resetPhotoSync();
+      voiceWelcome();
       if (document.visibilityState === "hidden") send({ t: "away" });
       store.set("db.seat", { code: m.code, at: Date.now() });
       break;
@@ -360,6 +366,9 @@ function onMessage(m: ServerMsg) {
       break;
     case "drawing":
       addDrawing(m);
+      break;
+    case "rtc":
+      onRtc(m.from, m.d);
       break;
     case "photo":
       notePhoto(m.id, m.v, m.data);
@@ -404,6 +413,8 @@ function onState(v: View) {
   }
   syncSoundButtons();
   syncPhoto();
+  syncVoice();
+  renderVoice();
   // The host turned photos on or off: the look picker shows or hides the camera.
   if (prev && prev.settings.photos !== v.settings.photos) renderProfile();
 }
@@ -556,6 +567,7 @@ function boot() {
   initOver(leaveRoom);
   initPractice({ show, navigate });
   initCamera();
+  initVoiceUi();
   // Bring back this visit's photo; if the room reconnected first, send it now.
   void restoreMyPhoto().then(() => {
     renderProfile();
@@ -627,7 +639,7 @@ function boot() {
 }
 
 // Expose a few helpers for debugging in the console.
-(window as unknown as { doodle: unknown }).doodle = { app, inviteLink, me };
+(window as unknown as { doodle: unknown }).doodle = { app, inviteLink, me, voice };
 void toast;
 
 boot();

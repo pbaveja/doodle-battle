@@ -121,6 +121,37 @@ photo in your colour), and Use photo, Retake or Use a character instead. There's
 - **Player photos switch:** the host can turn photos off in the lobby. Every photo in the room is deleted
   and everyone sees characters until it's turned back on.
 
+## Voice chat
+
+Players can talk to each other. The **Voice** button (top bar in the lobby and on the results, next to
+the clock in a game) joins the voice chat; after that the same button mutes and unmutes, and the arrow
+beside it lists who's in voice, lets you mute someone just for yourself, and has **Leave voice chat**.
+If the browser blocks the mic, you join as a listener and can try the mic again from the same button.
+A small mic after a name shows who's in voice (crossed out when their mic is off), and an avatar gets a
+ring in the player's colour while they talk.
+
+The host picks the room's voice rule in the lobby (the ⓘ next to it explains them):
+
+| Setting | What happens |
+|---|---|
+| Off | No voice chat. Everyone in voice is taken out. |
+| Between turns | Talk in the lobby, after each drawing and on the results. Everyone is muted while a word is picked and drawn. |
+| Always (default) | Talk the whole game. During a turn guessers can't hear the drawer, and players who've guessed are only heard by the drawer and others who've guessed, like the chat. |
+
+**How it stays off the server.** Audio goes straight between browsers (WebRTC, one connection per
+pair of players). The room only passes on the handshake: one offer and one answer per pair, each sent
+once with all its connection details instead of trickled, and the player with the lower id always
+makes the offer so two never cross. Muting travels over a small data channel on the same connection,
+speaking rings are measured on each device, and the turn rules above are applied by every device to
+what it plays (and what it sends), so none of that sends the room anything. Joining or leaving voice is
+one message. A dropped connection or a reload starts outside voice, the page rejoins by itself, and the
+calls are made again once. A call that fails is retried at most three times, then shows "Couldn't
+connect". The room keeps nothing about voice except who's in it.
+
+Voice uses public STUN servers to find each device's address. A few networks (some mobile carriers and
+office Wi-Fi) need a relay (TURN) to connect, which isn't set up yet; on those, a player shows
+"Couldn't connect" in the voice menu.
+
 ## Practice
 
 **Practice drawing** on the home screen is for one person warming up. Pick a category, difficulty, draw
@@ -156,7 +187,8 @@ each player earned and slides everyone into their new position.
 Cloudflare's free plan allows, each day, 100,000 Durable Object requests, 13,000 GB-seconds of
 room time and 100,000 rows written to storage. Messages sent out to players are free, incoming ones
 count 20 to a request, and heartbeats are answered without waking the room, so a full 8-player game
-uses roughly 130 requests. Room time runs out first: a room stays awake for the whole game, which
+uses roughly 130 requests. Voice chat adds about 3 requests for 8 players in voice: one message each to
+join, and an offer and an answer per pair (64 messages in all). Reconnects add one offer and answer per pair again. Room time runs out first: a room stays awake for the whole game, which
 works out to roughly 50 full 8-player games a day (more for shorter games). A quiet lobby sleeps
 between messages. Limits reset at 00:00 UTC. The $5/month Workers Paid plan removes this
 ceiling if you ever need it.
@@ -193,6 +225,7 @@ node tests/e2e-net.mjs                    # dropped, frozen and offline connecti
 node tests/e2e-v2.mjs                     # categories, nudges, leaderboard, end turn, phone keyboard layout
 node tests/e2e-away.mjs                   # stepping away, host role, phone home screen and banner
 node tests/e2e-practice.mjs               # practice on laptop, iPad and phones, upright and sideways
+node tests/e2e-voice.mjs                  # voice chat: calls, muting, turn rules, reconnects, message counts, phone layout
 LAG=150 FAST=1 bun dev/server.ts          # add 150 ms each way to test under latency
 ```
 

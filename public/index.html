@@ -192,6 +192,7 @@
     <header class="topbar">
       <a class="brand" href="/" data-leave aria-label="Doodle Battle home">Doodle Battle</a>
       <div class="topbar-actions">
+        <div class="voice-slot" id="lobbyVoice"></div>
         <button class="iconbtn" type="button" data-sound aria-label="Sound on"></button>
         <button class="btn ghost small" type="button" id="lobbyLeave">Leave</button>
       </div>
@@ -273,6 +274,27 @@
             <label class="check"><input type="checkbox" id="showCategory"> <span>Show category <span class="opt" id="showCategoryHint">Guessers see the word's category</span></span></label>
           </div>
           <div class="setting wide">
+            <div class="labelrow">
+              <span class="label" id="lVoice">Voice chat</span>
+              <button type="button" class="infobtn" id="voiceInfoBtn" aria-expanded="false" aria-controls="voiceInfo" aria-label="About voice chat">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v6"/><circle cx="12" cy="7.4" r=".6" fill="currentColor"/></svg>
+              </button>
+            </div>
+            <div class="seg three" id="voiceSeg" role="radiogroup" aria-labelledby="lVoice">
+              <button type="button" role="radio" data-v="off">Off</button>
+              <button type="button" role="radio" data-v="breaks">Between turns</button>
+              <button type="button" role="radio" data-v="on">Always</button>
+            </div>
+            <div class="infobox" id="voiceInfo" hidden>
+              <p>Players can talk to each other. Everyone chooses whether to join with the <b>Voice</b> button, and can mute themselves any time. Voice goes straight between players' devices.</p>
+              <dl>
+                <dt>Off</dt><dd>No voice chat in this room.</dd>
+                <dt>Between turns</dt><dd>Talk in the lobby, after each drawing and on the results. Everyone is muted while a word is picked and drawn.</dd>
+                <dt>Always</dt><dd>Talk the whole game. During a turn, guessers can't hear the drawer, and players who've guessed are only heard by the drawer and others who've guessed. Guesses still only count in the chat.</dd>
+              </dl>
+            </div>
+          </div>
+          <div class="setting wide">
             <label class="check"><input type="checkbox" id="photosOn"> <span>Player photos <span class="opt">Players can use a photo of themselves</span></span></label>
           </div>
           <div class="setting wide">
@@ -304,6 +326,7 @@
           <span>New words</span>
         </button>
         <button class="btn primary small pdone practice-only" id="pDone" type="button" hidden>Done</button>
+        <div class="voice-slot room-only" id="gameVoice"></div>
         <div class="clock" id="clock" role="timer" aria-label="Time left">
           <svg class="hg" viewBox="0 0 28 40" width="22" height="31" aria-hidden="true">
             <defs><clipPath id="hgClip"><path d="M6 5 C6 14 12.6 17 12.6 20 C12.6 23 6 26 6 35 L22 35 C22 26 15.4 23 15.4 20 C15.4 17 22 14 22 5 Z"/></clipPath></defs>
@@ -391,6 +414,7 @@
     <header class="topbar">
       <span class="brand">Doodle Battle</span>
       <div class="topbar-actions">
+        <div class="voice-slot" id="overVoice"></div>
         <button class="iconbtn" type="button" data-sound aria-label="Sound on"></button>
       </div>
     </header>
@@ -428,6 +452,18 @@
       </button>
     </form>
   </div>
+
+  <!-- Voice chat button and menu (moved between the lobby, the game and the results) -->
+  <div class="voice" id="voice" hidden>
+    <div class="vctl">
+      <button class="vbtn" id="voiceBtn" type="button"></button>
+      <button class="vmore" id="voiceMore" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="voiceMenu" aria-label="Voice chat options" hidden>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+    </div>
+    <div class="menu vmenu" id="voiceMenu" hidden></div>
+  </div>
+  <style id="voiceCss"></style>
 
   <!-- Profile editor component (moved between screens) -->
   <div class="profile" id="profile" hidden>

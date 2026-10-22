@@ -868,3 +868,84 @@ describe("word variety", () => {
     });
   }
 });
+
+describe("voice chat", () => {
+  const rtcs = (h: Harness, cid: string) => h.msgs(cid).filter((m) => m.t === "rtc");
+  const inVoice = (h: Harness, cid: string) => h.view(cid).players.filter((p) => p.voice).map((p) => p.id);
+
+  test("players join and leave the voice chat, and everyone sees who's in", () => {
+    const h = lobby(3);
+    h.send("c1", { t: "voice", on: true });
+    h.send("c2", { t: "voice", on: true });
+    expect(inVoice(h, "c3")).toEqual([P[0], P[1]]);
+    h.send("c2", { t: "voice", on: false });
+    expect(inVoice(h, "c3")).toEqual([P[0]]);
+  });
+
+  test("handshakes go only to the named player, and only between players in voice", () => {
+    const h = lobby(3);
+    h.send("c1", { t: "voice", on: true });
+    h.send("c1", { t: "rtc", to: P[1], d: "offer" }); // Ben isn't in voice yet
+    expect(rtcs(h, "c2")).toEqual([]);
+    h.send("c2", { t: "voice", on: true });
+    h.send("c1", { t: "rtc", to: P[1], d: "offer" });
+    h.send("c2", { t: "rtc", to: P[0], d: "answer" });
+    expect(rtcs(h, "c2")).toEqual([{ t: "rtc", from: P[0], d: "offer" }]);
+    expect(rtcs(h, "c1")).toEqual([{ t: "rtc", from: P[1], d: "answer" }]);
+    expect(rtcs(h, "c3")).toEqual([]);
+    h.send("c3", { t: "rtc", to: P[0], d: "sneaky" }); // Chen isn't in voice
+    h.send("c1", { t: "rtc", to: P[0], d: "self" });
+    h.send("c1", { t: "rtc", to: P[1], d: "x".repeat(20_000) });
+    expect(rtcs(h, "c1").length).toBe(1);
+    expect(rtcs(h, "c2").length).toBe(1);
+  });
+
+  test("handshakes are not saved and don't send state to anyone", () => {
+    const h = lobby(2);
+    h.send("c1", { t: "voice", on: true });
+    h.send("c2", { t: "voice", on: true });
+    h.advance(5000);
+    const saved = h.storage.get("state");
+    const states = h.msgs("c1").length;
+    h.send("c1", { t: "rtc", to: P[1], d: "offer" });
+    expect(h.storage.get("state")).toEqual(saved);
+    expect(h.msgs("c1").length).toBe(states);
+  });
+
+  test("handshakes are rate limited", () => {
+    const h = lobby(2);
+    h.send("c1", { t: "voice", on: true });
+    h.send("c2", { t: "voice", on: true });
+    for (let i = 0; i < 50; i++) h.send("c1", { t: "rtc", to: P[1], d: `m${i}` });
+    expect(rtcs(h, "c2").length).toBe(30);
+    h.advance(11_000);
+    h.send("c1", { t: "rtc", to: P[1], d: "later" });
+    expect(rtcs(h, "c2").length).toBe(31);
+  });
+
+  test("a new connection starts outside the voice chat, and a dropped one leaves it", () => {
+    const h = lobby(2);
+    h.send("c1", { t: "voice", on: true });
+    h.drop("c1");
+    expect(inVoice(h, "c2")).toEqual([]);
+    h.join("c3", P[0], "Asha"); // a reload
+    expect(inVoice(h, "c2")).toEqual([]);
+    h.send("c3", { t: "voice", on: true });
+    expect(inVoice(h, "c2")).toEqual([P[0]]);
+  });
+
+  test("turning voice off for the room takes everyone out, and nobody can join", () => {
+    const h = lobby(2);
+    h.send("c1", { t: "voice", on: true });
+    h.send("c2", { t: "voice", on: true });
+    h.send("c1", { t: "settings", s: { voice: "off" } });
+    expect(h.view("c2").settings.voice).toBe("off");
+    expect(inVoice(h, "c2")).toEqual([]);
+    h.send("c2", { t: "voice", on: true });
+    expect(inVoice(h, "c2")).toEqual([]);
+    h.send("c1", { t: "settings", s: { voice: "breaks" } });
+    expect(h.view("c2").settings.voice).toBe("breaks");
+    h.send("c1", { t: "settings", s: { voice: "loud" } });
+    expect(h.view("c2").settings.voice).toBe("breaks");
+  });
+});
