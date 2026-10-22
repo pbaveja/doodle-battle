@@ -11,6 +11,7 @@ import { addDrawing, initOver, renderOver, resetOver } from "./screens/over";
 import { initPractice, leavePractice, showPracticeSetup } from "./screens/practice";
 import { initCamera } from "./camera";
 import { APP_NAME, applyEdition, EDITION_QS } from "./edition";
+import { setSmartboard } from "./smartboard";
 import { clearRoomPhotos, putPhoto, restoreMyPhoto } from "./photos";
 import { commitPhoto, notePhoto, resetPhotoSync, syncPhoto } from "./roomphoto";
 import { sfx, sound, unlock } from "./sound";
@@ -576,6 +577,8 @@ function boot() {
     if (app.joined) commitPhoto();
   });
   syncSoundButtons();
+
+  for (const c of $$<HTMLInputElement>("[data-smartboard]")) c.addEventListener("change", () => setSmartboard(c.checked));
 
   $("#createBtn").addEventListener("click", () => {
     unlock();

@@ -64,6 +64,24 @@ needed: there's no separate deploy and rooms live in the same place.
 To try it anywhere else (localhost, the preview, workers.dev), open any page with `?students=1`. The
 browser remembers it until you open a page with `?students=0`.
 
+## Smartboard view (classrooms)
+
+For a classroom's big touch screen (a 65" interactive panel), tick **Smartboard view** on the home page or
+in the lobby, or open any page with `?board=1` (`?board=0` turns it off). It's remembered on that screen
+only, and switching it on also goes full screen. The game menu has the switch and a **Full screen** button too.
+
+- **Readable from the back row.** The word, clock, scores and guesses are about 50px tall (legible text is
+  roughly the viewing distance / 200, so 4 cm at 8 m).
+- **The drawing pad.** On the drawer's screen, a student draws on a small pad low in a corner, within reach,
+  while the class watches the big canvas. The tools sit in the pad. Touches on the big canvas are ignored,
+  so a sleeve brushing the screen draws nothing. Drag the pad by its bar (it snaps to the bottom corners),
+  use the arrows to jump to a corner, or + and − to resize it. It stays clear of the screen edges, where
+  panels put their own swipe-in toolbars.
+- **On-screen keys.** Guessing classrooms type on big letter keys under the drawing. Letters fill the word's
+  blanks (spaces in multi-word answers are added for you) and **Guess** sends it. The chat box is hidden
+  while the keys are up, so the panel's own keyboard never pops up over the drawing. A keyboard plugged into
+  the panel types into the keys too.
+
 ## Play locally
 
 ```
@@ -243,6 +261,7 @@ node tests/e2e-v2.mjs                     # categories, nudges, leaderboard, end
 node tests/e2e-away.mjs                   # stepping away, host role, phone home screen and banner
 node tests/e2e-practice.mjs               # practice on laptop, iPad and phones, upright and sideways
 node tests/e2e-voice.mjs                  # voice chat: calls, muting, turn rules, reconnects, message counts, phone layout
+node tests/e2e-smartboard.mjs             # two classrooms on 65" panels: the drawing pad and on-screen keys
 LAG=150 FAST=1 bun dev/server.ts          # add 150 ms each way to test under latency
 ```
 

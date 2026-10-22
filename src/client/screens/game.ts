@@ -3,6 +3,9 @@ import { app, inviteLink, isHost, player, send, serverNow, toast } from "../app"
 import { avatarHtml } from "../avatar";
 import { Board, thumbnail, type Tool } from "../board";
 import { focusChat, mountChat, setChatMode } from "../chat";
+import {
+  canFullscreen, initSmartboard, isFullscreen, isSmartboard, renderSmartboard, setSmartboard, toggleFullscreen,
+} from "../smartboard";
 import { buzz, sfx } from "../sound";
 import { voiceMark } from "../voiceui";
 import { $, $$, copyText, esc, plural, reducedMotion, twoTap } from "../util";
@@ -32,6 +35,11 @@ export function initGame(onLeave: () => void) {
   board.onDesync = () => send({ t: "sync" });
   board.onFull = () => toast("This drawing is getting huge. Undo or clear to keep going.", true);
   board.onChange = syncToolState;
+  initSmartboard(board, () => {
+    syncBoardSwitches();
+    if (app.view && inGame(app.view)) renderGame(app.view, null);
+  });
+  syncBoardSwitches();
 
   // Palette
   const pal = $("#palette");
@@ -114,6 +122,14 @@ export function initGame(onLeave: () => void) {
     toast(ok ? "Invite link copied" : `Share this link: ${inviteLink()}`, !ok, ok ? 2600 : 6000);
     closeMenu();
   });
+  $("#menuBoard").addEventListener("click", () => {
+    setSmartboard(!isSmartboard());
+    closeMenu();
+  });
+  $("#menuFull").addEventListener("click", () => {
+    toggleFullscreen();
+    closeMenu();
+  });
   twoTap($<HTMLButtonElement>("#menuSkip"), "Tap again to end your turn", () => {
     if (!send({ t: "skip" })) toast("You're offline. Try again in a moment.", true);
     closeMenu();
@@ -132,9 +148,19 @@ export function initGame(onLeave: () => void) {
   });
 }
 
+/** Every smartboard switch (home, lobby, game menu) shows the same state. */
+function syncBoardSwitches() {
+  for (const c of $$<HTMLInputElement>("[data-smartboard]")) c.checked = isSmartboard();
+  $("#menuBoard").textContent = `Smartboard view: ${isSmartboard() ? "on" : "off"}`;
+}
+
 function renderMenu() {
   const v = app.view;
   $("#menuCode").textContent = app.code;
+  syncBoardSwitches();
+  const full = $("#menuFull");
+  full.hidden = !canFullscreen();
+  full.textContent = isFullscreen() ? "Exit full screen" : "Full screen";
   $("#menuEnd").hidden = !(v && isHost() && inGame(v));
   $("#menuSkip").hidden = !(v && v.drawer === v.you && (v.phase === "choosing" || v.phase === "drawing"));
   const kick = $("#menuKick");
@@ -203,6 +229,7 @@ export function showGame() {
 }
 
 export function stopGameTimers() {
+  renderSmartboard(null);
   clearInterval(clockTimer);
   clockTimer = 0;
   clearTimeout(overlayTimer);
@@ -273,7 +300,9 @@ export function renderGame(v: View, prev: View | null) {
   else if (drawing && guessed) setChatMode({ placeholder: "Chat with players who guessed", disabled: false, cls: "guessed" });
   else if (drawing) setChatMode({ placeholder: "Type your guess here", disabled: false, cls: "guess" });
   else setChatMode({ placeholder: "Say something", disabled: false, cls: "" });
-  if (drawing && !isDrawer && !guessed && prev?.phase !== "drawing") focusChat();
+  // On a smartboard the on-screen keys take the guesses (and a plugged-in keyboard's typing).
+  if (drawing && !isDrawer && !guessed && prev?.phase !== "drawing" && !isSmartboard()) focusChat();
+  renderSmartboard(v);
 
   maybeCapture(v);
   startClock();

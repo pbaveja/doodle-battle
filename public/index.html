@@ -77,6 +77,7 @@
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
         Practice drawing
       </a>
+      <label class="check boardcheck"><input type="checkbox" data-smartboard> <span>Smartboard view <span class="opt">For a classroom's big touch screen: large text, a drawing pad and on-screen keys</span></span></label>
     </section>
   </main>
 
@@ -196,6 +197,7 @@
     <header class="topbar">
       <a class="brand" href="/" data-leave aria-label="Doodle Battle home">Doodle Battle</a>
       <div class="topbar-actions">
+        <label class="check boardcheck small"><input type="checkbox" data-smartboard> <span>Smartboard view</span></label>
         <div class="voice-slot" id="lobbyVoice"></div>
         <button class="iconbtn" type="button" data-sound aria-label="Sound on"></button>
         <button class="btn ghost small" type="button" id="lobbyLeave">Leave</button>
@@ -358,6 +360,8 @@
             <p class="menu-code practice-only">Practice</p>
             <button type="button" class="menuitem room-only" id="menuInvite">Copy invite link</button>
             <button type="button" class="menuitem" id="menuSound" data-sound-text>Sound: on</button>
+            <button type="button" class="menuitem room-only" id="menuBoard">Smartboard view: off</button>
+            <button type="button" class="menuitem room-only" id="menuFull">Full screen</button>
             <button type="button" class="menuitem room-only danger" id="menuSkip" hidden>End my turn</button>
             <button type="button" class="menuitem room-only danger" id="menuEnd" hidden>End game for everyone</button>
             <div class="menukick room-only" id="menuKick" hidden></div>
@@ -412,9 +416,30 @@
         </div>
         <div class="palette" id="palette" role="group" aria-label="Colours"></div>
       </div>
+      <!-- Smartboard view: big keys for guessing, so the panel's own keyboard never covers the drawing -->
+      <div class="kbd" id="kbd" hidden>
+        <div class="kbd-answer" id="kbdAnswer" aria-live="polite"></div>
+        <div class="kbd-keys" id="kbdKeys" role="group" aria-label="Letters"></div>
+      </div>
     </section>
 
     <aside class="chat-col chat-slot" id="gameChat" aria-label="Guesses and chat"></aside>
+
+    <!-- Smartboard view: the drawer's pad, low in a corner the students can reach. It mirrors the big canvas. -->
+    <section class="pad" id="pad" aria-label="Drawing pad" hidden>
+      <div class="padbar" id="padGrip">
+        <svg class="grip" viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><circle cx="8" cy="6" r="1.8"/><circle cx="16" cy="6" r="1.8"/><circle cx="8" cy="12" r="1.8"/><circle cx="16" cy="12" r="1.8"/><circle cx="8" cy="18" r="1.8"/><circle cx="16" cy="18" r="1.8"/></svg>
+        <span class="padsay">Draw</span><span class="padword" id="padWord"></span>
+        <span class="padbtns">
+          <button type="button" class="padbtn" data-pad-size="-1" aria-label="Smaller pad">−</button>
+          <button type="button" class="padbtn" data-pad-size="1" aria-label="Bigger pad">+</button>
+          <button type="button" class="padbtn" data-pad-corner="left" aria-label="Move to the bottom left">↙</button>
+          <button type="button" class="padbtn" data-pad-corner="right" aria-label="Move to the bottom right">↘</button>
+        </span>
+      </div>
+      <canvas id="padCanvas" aria-label="Drawing pad"></canvas>
+      <div class="padtools" id="padTools"></div>
+    </section>
   </main>
 
   <!-- GAME OVER -->
