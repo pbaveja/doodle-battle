@@ -875,6 +875,7 @@ describe("voice chat", () => {
 
   test("players join and leave the voice chat, and everyone sees who's in", () => {
     const h = lobby(3);
+    h.send("c1", { t: "settings", s: { voice: "on" } });
     h.send("c1", { t: "voice", on: true });
     h.send("c2", { t: "voice", on: true });
     expect(inVoice(h, "c3")).toEqual([P[0], P[1]]);
@@ -884,6 +885,7 @@ describe("voice chat", () => {
 
   test("handshakes go only to the named player, and only between players in voice", () => {
     const h = lobby(3);
+    h.send("c1", { t: "settings", s: { voice: "on" } });
     h.send("c1", { t: "voice", on: true });
     h.send("c1", { t: "rtc", to: P[1], d: "offer" }); // Ben isn't in voice yet
     expect(rtcs(h, "c2")).toEqual([]);
@@ -902,6 +904,7 @@ describe("voice chat", () => {
 
   test("handshakes are not saved and don't send state to anyone", () => {
     const h = lobby(2);
+    h.send("c1", { t: "settings", s: { voice: "on" } });
     h.send("c1", { t: "voice", on: true });
     h.send("c2", { t: "voice", on: true });
     h.advance(5000);
@@ -914,6 +917,7 @@ describe("voice chat", () => {
 
   test("handshakes are rate limited", () => {
     const h = lobby(2);
+    h.send("c1", { t: "settings", s: { voice: "on" } });
     h.send("c1", { t: "voice", on: true });
     h.send("c2", { t: "voice", on: true });
     for (let i = 0; i < 50; i++) h.send("c1", { t: "rtc", to: P[1], d: `m${i}` });
@@ -925,6 +929,7 @@ describe("voice chat", () => {
 
   test("a new connection starts outside the voice chat, and a dropped one leaves it", () => {
     const h = lobby(2);
+    h.send("c1", { t: "settings", s: { voice: "on" } });
     h.send("c1", { t: "voice", on: true });
     h.drop("c1");
     expect(inVoice(h, "c2")).toEqual([]);
@@ -936,6 +941,7 @@ describe("voice chat", () => {
 
   test("turning voice off for the room takes everyone out, and nobody can join", () => {
     const h = lobby(2);
+    h.send("c1", { t: "settings", s: { voice: "on" } });
     h.send("c1", { t: "voice", on: true });
     h.send("c2", { t: "voice", on: true });
     h.send("c1", { t: "settings", s: { voice: "off" } });

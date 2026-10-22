@@ -82,8 +82,10 @@ for (const [d, n] of [[G, "Riya"], [C, "Sam"]]) {
 const [hId, gId, cId] = [await pid(H), await pid(G), await pid(C)];
 
 // 1. The lobby: the voice button, the host setting and its info
+check("voice is off by default", (await H.page.getAttribute('#voiceSeg [data-v="off"]', "aria-checked")) === "true");
+await H.page.click('#voiceSeg [data-v="on"]');
+await G.page.waitForSelector("#lobbyVoice #voiceBtn", { state: "visible" });
 check("voice button shows in the lobby", await G.page.isVisible("#lobbyVoice #voiceBtn"));
-check("voice is on by default (Always)", (await H.page.getAttribute('#voiceSeg [data-v="on"]', "aria-checked")) === "true");
 check("info is hidden until asked", !(await G.page.isVisible("#voiceInfo")));
 await G.page.click("#voiceInfoBtn");
 check("guests can read the voice info", await G.page.isVisible("#voiceInfo") && /Between turns/.test(await G.page.textContent("#voiceInfo")));
