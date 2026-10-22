@@ -98,6 +98,8 @@ p { margin: 0; }
 
 /* ---------- type ---------- */
 .title { font: 800 clamp(48px, 9vw, 84px)/.92 var(--display); letter-spacing: -.02em; margin: 0; text-wrap: balance; }
+/* Student edition: a badge after the title on the home page. */
+.edition-badge { display: inline-block; vertical-align: middle; margin-left: .2em; padding: .18em .5em; border-radius: 999px; background: var(--m-blue); color: #fff; font: 700 .26em/1 var(--body); letter-spacing: .08em; text-transform: uppercase; transform: translateY(-.2em); }
 .h1 { font: 800 clamp(36px, 6vw, 56px)/1 var(--display); margin: 0; text-wrap: balance; letter-spacing: -.01em; }
 .h2 { font: 800 28px/1.1 var(--display); margin: 0; text-wrap: balance; }
 .h3 { font: 700 19px/1.2 var(--display); margin: 0; }

@@ -1,5 +1,6 @@
 import { DRAW_TIMES, INKS, LIMITS, type Settings, type View } from "../../shared/protocol";
 import { CATEGORIES } from "../../shared/categories";
+import { GRADES, subjectOptions } from "../../shared/students";
 import { app, inviteLink, isHost, me, send, toast } from "../app";
 import { avatarHtml } from "../avatar";
 import { mountChat } from "../chat";
@@ -11,6 +12,17 @@ import { $, $$, copyText, esc } from "../util";
 const CROWN = `<svg class="crown" viewBox="0 0 24 24" width="16" height="16" aria-label="Host"><path d="M3 18h18l-1.5-10-5 4L12 5l-2.5 7-5-4Z" fill="currentColor"/></svg>`;
 
 let customTimer = 0;
+/** What the category picker currently lists, so it's only rebuilt when the edition or class changes. */
+let catOptionsKey = "";
+
+function categoryOptions(s: Settings) {
+  const key = s.edition === "students" ? `s${s.grade}` : "main";
+  if (key === catOptionsKey) return;
+  catOptionsKey = key;
+  const list = s.edition === "students" ? subjectOptions(s.grade) : CATEGORIES;
+  const all = s.edition === "students" ? "All subjects" : "All categories";
+  $("#categorySel").innerHTML = `<option value="all">${all}</option>${list.map((c) => `<option value="${c.id}">${c.label}</option>`).join("")}`;
+}
 
 export function initLobby(onLeave: () => void) {
   $("#copyLink").addEventListener("click", async () => {
@@ -54,8 +66,13 @@ export function initLobby(onLeave: () => void) {
     clearTimeout(customTimer);
     if (app.view && custom.value !== app.view.settings.customWords) send({ t: "settings", s: { customWords: custom.value } });
   });
+  const grade = $<HTMLSelectElement>("#gradeSel");
+  grade.innerHTML = GRADES.map((g) => `<option value="${g}">Class ${g}</option>`).join("");
+  grade.addEventListener("change", () => {
+    if (!isHost()) return;
+    send({ t: "settings", s: { grade: Number(grade.value) } });
+  });
   const cat = $<HTMLSelectElement>("#categorySel");
-  cat.innerHTML = `<option value="all">All categories</option>${CATEGORIES.map((c) => `<option value="${c.id}">${c.label}</option>`).join("")}`;
   cat.addEventListener("change", () => {
     if (!isHost()) return;
     send({ t: "settings", s: { category: cat.value } });
@@ -164,6 +181,15 @@ export function renderLobby(v: View) {
   val("drawTime", `${s.drawTime}s`, s.drawTime <= DRAW_TIMES[0], s.drawTime >= DRAW_TIMES[DRAW_TIMES.length - 1]);
   val("maxPlayers", String(s.maxPlayers), s.maxPlayers <= Math.max(LIMITS.minPlayers, v.players.length), s.maxPlayers >= LIMITS.maxPlayers);
   val("hints", s.hints === 0 ? "Off" : String(s.hints), s.hints <= 0, s.hints >= LIMITS.maxHints);
+  // The student edition picks words by class and subject instead of difficulty and category.
+  const students = s.edition === "students";
+  $("#diffSetting").hidden = students;
+  $("#gradeSetting").hidden = !students;
+  $("#categoryLabel").textContent = students ? "Subject" : "Category";
+  const grade = $<HTMLSelectElement>("#gradeSel");
+  grade.value = String(s.grade);
+  grade.disabled = !host;
+  categoryOptions(s);
   for (const b of $$("button", $("#diffSeg"))) {
     b.setAttribute("aria-checked", String(b.dataset.v === s.difficulty));
     b.tabIndex = host ? 0 : -1;
@@ -178,11 +204,13 @@ export function renderLobby(v: View) {
   const catPicked = s.category !== "all";
   showCat.checked = catPicked || s.showCategory;
   showCat.disabled = !host || catPicked;
-  $("#showCategoryHint").textContent = catPicked ? "Always shown when a category is chosen" : "Guessers see the word's category";
+  const word = students ? "subject" : "category";
+  showCat.nextElementSibling!.firstChild!.textContent = `Show ${word} `;
+  $("#showCategoryHint").textContent = catPicked ? `Always shown when a ${word} is chosen` : `Guessers see the word's ${word}`;
   const custom = $<HTMLTextAreaElement>("#customWords");
   custom.readOnly = !host;
   if (document.activeElement !== custom) custom.value = s.customWords;
-  custom.placeholder = host ? "office party, our dog Max, beach trip" : "No custom words";
+  custom.placeholder = host ? (students ? "our school, sports day, science fair" : "office party, our dog Max, beach trip") : "No custom words";
   for (const b of $$("button", $("#voiceSeg"))) {
     b.setAttribute("aria-checked", String(b.dataset.v === (s.voice ?? "off")));
     b.tabIndex = host ? 0 : -1;

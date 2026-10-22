@@ -15,6 +15,8 @@ import {
 } from "../shared/rules";
 import { WORD_ENTRIES } from "../shared/words";
 import { categoryLabel } from "../shared/categories";
+import { STUDENT_WORDS } from "../shared/student-words";
+import { categoryMatches, gradeLevel, subjectLabel, type Edition } from "../shared/students";
 
 /** A word as the room uses it: built-in words carry a category and related guesses. */
 interface Entry {
@@ -27,7 +29,22 @@ interface Entry {
 
 const BUILT_IN: Entry[] = WORD_ENTRIES.map((e) => ({ ...e }));
 const MIXED_LEVELS = ["easy", "medium", "hard"] as const;
-const BUILT_IN_KEYS = new Set(BUILT_IN.map((e) => normalizeGuess(e.word)));
+/** Every built-in word in either edition, so a different real word is never treated as a typo. */
+const BUILT_IN_KEYS = new Set([...WORD_ENTRIES, ...STUDENT_WORDS].map((e) => normalizeGuess(e.word)));
+const studentPools = new Map<number, Entry[]>();
+/** Student words up to the given class, with a level relative to it (see gradeLevel). */
+function studentEntries(grade: number): Entry[] {
+  let pool = studentPools.get(grade);
+  if (!pool) {
+    pool = [];
+    for (const w of STUDENT_WORDS) {
+      const level = gradeLevel(w.grade, grade);
+      if (level) pool.push({ word: w.word, level, category: w.subject, very: w.very, close: w.close });
+    }
+    studentPools.set(grade, pool);
+  }
+  return pool;
+}
 const customEntry = (word: string): Entry => ({ word, level: "custom", category: null, very: [], close: [] });
 
 export interface RoomIO {
@@ -229,11 +246,14 @@ export class RoomCore {
     return this.created > 0 && !this.destroyed;
   }
 
-  claim(code: string): boolean {
+  claim(code: string, edition: Edition = "main"): boolean {
     if (this.exists()) return false;
     const now = this.io.now();
     this.reset();
     this.code = code;
+    this.settings.edition = edition;
+    // Student rooms are for children: photos stay off unless the host turns them on.
+    if (edition === "students") this.settings.photos = false;
     this.created = now;
     this.emptySince = now;
     this.tally = newTally(now);
@@ -298,7 +318,7 @@ export class RoomCore {
     if (this.turn) {
       const tt = this.turn as Turn & { choices: (Entry | string)[] };
       tt.choices = tt.choices.map((c) => (typeof c === "string" ? customEntry(c) : c));
-      if (tt.word && !tt.entry) tt.entry = BUILT_IN.find((e) => e.word === tt.word) ?? customEntry(tt.word);
+      if (tt.word && !tt.entry) tt.entry = this.wordList().find((e) => e.word === tt.word) ?? customEntry(tt.word);
     }
     this.turnCount = snap.turnCount;
     this.phaseEnds = snap.phaseEnds;
@@ -911,17 +931,23 @@ export class RoomCore {
     this.markView(true);
   }
 
+  /** The room's built-in words: the main list, or the student words up to the chosen class. */
+  private wordList(): Entry[] {
+    return this.settings.edition === "students" ? studentEntries(this.settings.grade) : BUILT_IN;
+  }
+
   /** Built-in words for the chosen category and difficulty, widening when a pool runs dry. */
   /** In mixed mode, choice i is easy, medium or hard, so the drawer can always gamble on a hard word. */
   private builtInPool(choice: number): Entry[][] {
     const cat = this.settings.category;
-    const inCat = cat === "all" ? BUILT_IN : BUILT_IN.filter((e) => e.category === cat);
+    const all = this.wordList();
+    const inCat = all.filter((e) => categoryMatches(cat, e.category));
     const level = this.choiceLevel(choice);
-    return [inCat.filter((e) => e.level === level), inCat, BUILT_IN];
+    return [inCat.filter((e) => e.level === level), inCat, all];
   }
 
   private choiceLevel(choice: number) {
-    const d = this.settings.difficulty;
+    const d = this.settings.edition === "students" ? "mixed" : this.settings.difficulty;
     return d === "mixed" ? MIXED_LEVELS[choice % MIXED_LEVELS.length] : d;
   }
 
@@ -967,7 +993,7 @@ export class RoomCore {
       }
       const tiers = this.builtInPool(i);
       if (tiers.some((t) => take(unseen(t)) || take(fresh(t)))) continue;
-      if (!take(tiers[1]) && !take(BUILT_IN)) break;
+      if (!take(tiers[1]) && !take(tiers[2])) break;
     }
     for (const e of out) this.offered.add(key(e));
     return out;
@@ -1415,6 +1441,10 @@ export class RoomCore {
 
   /* =================== views & sending =================== */
 
+  private label(category: string | null): string | null {
+    return this.settings.edition === "students" ? subjectLabel(category, this.settings.grade) : categoryLabel(category);
+  }
+
   /** A specific category is always shown. With all categories, the host's switch decides, and hard words stay hidden. */
   private showsCategory(entry: Entry): boolean {
     if (!entry.category) return false;
@@ -1451,8 +1481,8 @@ export class RoomCore {
       phaseStarted: this.phaseStarted,
       word: showWord ? t!.word : null,
       mask: t?.word && this.phase === "drawing" ? maskWord(t.word, t.revealed) : null,
-      choices: isDrawer && this.phase === "choosing" ? t!.choices.map((c) => ({ word: c.word, category: categoryLabel(c.category), level: c.level })) : null,
-      category: t?.entry && t.word && this.phase !== "choosing" && this.showsCategory(t.entry) ? categoryLabel(t.entry.category) : null,
+      choices: isDrawer && this.phase === "choosing" ? t!.choices.map((c) => ({ word: c.word, category: this.label(c.category), level: c.level })) : null,
+      category: t?.entry && t.word && this.phase !== "choosing" && this.showsCategory(t.entry) ? this.label(t.entry.category) : null,
       players,
       guessed: t ? t.guessed.map((g) => g.id) : [],
       turnScores: this.phase === "reveal" ? t?.scores ?? null : null,

@@ -3,6 +3,7 @@ import {
   FACE_COUNT, INKS, LIMITS, PALETTE, VOICE_MODES, type Item, type Op, type Result, type Settings,
 } from "./protocol";
 import { CATEGORY_IDS } from "./categories";
+import { fitSubject, subjectOptions, validGrade } from "./students";
 
 /* ---------- text ---------- */
 
@@ -286,12 +287,22 @@ export function sanitizeSettings(input: unknown, current: Settings, playerCount:
   if (mp !== null) s.maxPlayers = Math.min(LIMITS.maxPlayers, Math.max(LIMITS.minPlayers, playerCount, mp));
   const h = int(i.hints);
   if (h !== null) s.hints = Math.min(LIMITS.maxHints, Math.max(0, h));
-  if (typeof i.difficulty === "string" && (DIFFICULTIES as readonly string[]).includes(i.difficulty)) {
+  // The edition is fixed when the room is made. In the student edition the class sets the difficulty.
+  const students = s.edition === "students";
+  if (!students && typeof i.difficulty === "string" && (DIFFICULTIES as readonly string[]).includes(i.difficulty)) {
     s.difficulty = i.difficulty as Settings["difficulty"];
+  }
+  const grade = validGrade(i.grade);
+  if (students && grade !== null) {
+    s.grade = grade;
+    s.category = fitSubject(s.category, grade);
   }
   if (typeof i.customWords === "string") s.customWords = i.customWords.replace(CONTROL, (c) => (c === "\n" ? c : "")).slice(0, LIMITS.customMaxChars);
   if (typeof i.customOnly === "boolean") s.customOnly = i.customOnly;
-  if (typeof i.category === "string" && (i.category === "all" || CATEGORY_IDS.includes(i.category))) s.category = i.category;
+  if (typeof i.category === "string") {
+    const ids = students ? subjectOptions(s.grade).map((o) => o.id) : CATEGORY_IDS;
+    if (i.category === "all" || ids.includes(i.category)) s.category = i.category;
+  }
   if (typeof i.showCategory === "boolean") s.showCategory = i.showCategory;
   if (typeof i.photos === "boolean") s.photos = i.photos;
   if (typeof i.voice === "string" && (VOICE_MODES as readonly string[]).includes(i.voice)) s.voice = i.voice as Settings["voice"];

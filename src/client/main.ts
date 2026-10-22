@@ -10,6 +10,7 @@ import { initLobby, renderLobby, showLobby } from "./screens/lobby";
 import { addDrawing, initOver, renderOver, resetOver } from "./screens/over";
 import { initPractice, leavePractice, showPracticeSetup } from "./screens/practice";
 import { initCamera } from "./camera";
+import { APP_NAME, applyEdition, EDITION_QS } from "./edition";
 import { clearRoomPhotos, putPhoto, restoreMyPhoto } from "./photos";
 import { commitPhoto, notePhoto, resetPhotoSync, syncPhoto } from "./roomphoto";
 import { sfx, sound, unlock } from "./sound";
@@ -126,7 +127,7 @@ function disconnect(sendLeave = false) {
 /* ---------------- home & join ---------------- */
 
 function showHome() {
-  document.title = "Doodle Battle";
+  document.title = APP_NAME;
   mountProfile("#homeProfile", () => ($("#createErr").hidden = true));
   show("home");
 }
@@ -145,7 +146,7 @@ async function createRoom() {
   btn.textContent = "Creating…";
   err.hidden = true;
   try {
-    const res = await fetchWithTimeout("/api/rooms", { method: "POST" }, 8000);
+    const res = await fetchWithTimeout(`/api/rooms${EDITION_QS}`, { method: "POST" }, 8000);
     const data = (await res.json().catch(() => ({}))) as { code?: string; error?: string };
     if (!res.ok || !data.code) throw new Error(data.error || "Couldn't create a room right now. Try again.");
     store.set("db.seat", { code: data.code, at: Date.now() });
@@ -224,7 +225,7 @@ async function joinByCode(e: Event) {
 
 function openRoom(code: string) {
   app.code = code;
-  document.title = `Room ${code} · Doodle Battle`;
+  document.title = `Room ${code} · ${APP_NAME}`;
   if (!CODE_RE.test(code)) {
     notice("That link doesn't look right", "Room codes are 5 letters and numbers. Check the link, or create a new room.", "home");
     return;
@@ -559,6 +560,7 @@ function toggleSound() {
 /* ---------------- boot ---------------- */
 
 function boot() {
+  applyEdition();
   trackViewport();
   initProfile();
   initChat();

@@ -1,5 +1,7 @@
 // Shared types and constants for the Doodle Battle client and room server.
 
+import { DEFAULT_GRADE, type Edition } from "./students";
+
 export const PROTOCOL = 3;
 
 /** Every device draws on the same logical canvas, scaled to its screen. */
@@ -21,13 +23,17 @@ export interface Settings {
   difficulty: Difficulty;
   customWords: string;
   customOnly: boolean;
-  /** "all" or a category id from categories.ts */
+  /** "all" or a category id from categories.ts (a subject from students.ts in the student edition) */
   category: string;
   /** Show guessers the word's category. A specific category (not "all") is always shown. */
   showCategory: boolean;
   /** Players may use a photo of themselves. When off, photos aren't sent or kept at all. */
   photos: boolean;
   voice: VoiceMode;
+  /** Which word list the room uses. Set when the room is created, from the address it was made on. */
+  edition: Edition;
+  /** Student edition: the class (7 to 12) that sets the words, in place of the difficulty. */
+  grade: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -42,6 +48,8 @@ export const DEFAULT_SETTINGS: Settings = {
   showCategory: false,
   photos: true,
   voice: "on",
+  edition: "main",
+  grade: DEFAULT_GRADE,
 };
 
 export const LIMITS = {

@@ -95,11 +95,15 @@
         <p class="lede">Pick a word, draw it against the clock, and keep your sketches. No guessers, no pressure.</p>
       </div>
       <div class="settings" id="pSettings">
-        <div class="setting wide">
-          <label class="label" for="pCategory">Category</label>
-          <div class="selectwrap"><select id="pCategory"></select></div>
+        <div class="setting wide" id="pGradeSetting" hidden>
+          <label class="label" for="pGrade">Class</label>
+          <div class="selectwrap"><select id="pGrade"></select></div>
         </div>
         <div class="setting wide">
+          <label class="label" for="pCategory" id="pCategoryLabel">Category</label>
+          <div class="selectwrap"><select id="pCategory"></select></div>
+        </div>
+        <div class="setting wide" id="pDiffSetting">
           <span class="label" id="lpDiff">Difficulty</span>
           <div class="seg" id="pDiff" role="radiogroup" aria-labelledby="lpDiff">
             <button type="button" role="radio" data-v="easy">Easy</button>
@@ -257,7 +261,11 @@
               <button type="button" class="stepbtn" data-d="1" aria-label="More hints">+</button>
             </div>
           </div>
-          <div class="setting wide">
+          <div class="setting wide" id="gradeSetting" hidden>
+            <label class="label" for="gradeSel">Class</label>
+            <div class="selectwrap"><select id="gradeSel"></select></div>
+          </div>
+          <div class="setting wide" id="diffSetting">
             <span class="label" id="lDiff">Difficulty</span>
             <div class="seg" id="diffSeg" role="radiogroup" aria-labelledby="lDiff">
               <button type="button" role="radio" data-v="easy">Easy</button>
@@ -267,7 +275,7 @@
             </div>
           </div>
           <div class="setting wide">
-            <label class="label" for="categorySel">Category</label>
+            <label class="label" for="categorySel" id="categoryLabel">Category</label>
             <div class="selectwrap"><select id="categorySel"></select></div>
           </div>
           <div class="setting wide" id="showCategorySetting">

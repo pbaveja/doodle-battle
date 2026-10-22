@@ -3,6 +3,7 @@
 
 import { CODE_RE, HEARTBEAT, TIMING, type Timing } from "../src/shared/protocol";
 import { randomCode } from "../src/shared/rules";
+import { parseEdition } from "../src/shared/students";
 import { RoomCore, type RoomIO, type StoredPhoto } from "../src/server/room";
 import { wordsResponse } from "../src/server/words-api";
 import { join, normalize } from "node:path";
@@ -119,11 +120,11 @@ const server = Bun.serve<{ code: string; cid: string; pid?: string }, never>({
     if (path === "/api/rooms" && req.method === "POST") {
       for (let i = 0; i < 6; i++) {
         const code = randomCode(Math.random);
-        if (getRoom(code).core.claim(code)) return json({ code });
+        if (getRoom(code).core.claim(code, parseEdition(url.searchParams.get("edition")))) return json({ code });
       }
       return json({ error: "busy" }, 503);
     }
-    if (path === "/api/words") return later2(wordsResponse());
+    if (path === "/api/words") return later2(wordsResponse(parseEdition(url.searchParams.get("edition"))));
     const info = path.match(/^\/api\/rooms\/([A-Za-z0-9]{5})$/);
     if (info) {
       const code = info[1].toUpperCase();

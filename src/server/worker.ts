@@ -2,6 +2,7 @@
 
 import { CLOSE, CODE_RE, HEARTBEAT } from "../shared/protocol";
 import { randomCode } from "../shared/rules";
+import { parseEdition } from "../shared/students";
 import { RoomCore, type RoomIO, type StoredPhoto } from "./room";
 import { wordsResponse } from "./words-api";
 
@@ -33,15 +34,17 @@ export default {
     const path = url.pathname;
     try {
       if (path === "/api/rooms" && req.method === "POST") {
+        // The page says which edition it is (students.doodlebattle.in, or ?students=1 for testing).
+        const edition = parseEdition(url.searchParams.get("edition"));
         for (let i = 0; i < 6; i++) {
           const code = randomCode(Math.random);
-          const res = await roomStub(env, code).fetch("https://room/claim", { method: "POST", headers: { "x-room": code } });
+          const res = await roomStub(env, code).fetch("https://room/claim", { method: "POST", headers: { "x-room": code, "x-edition": edition } });
           if (res.status === 200) return json({ code });
         }
         return json({ error: "Couldn't create a room right now. Try again." }, 503);
       }
 
-      if (path === "/api/words" && req.method === "GET") return wordsResponse();
+      if (path === "/api/words" && req.method === "GET") return wordsResponse(parseEdition(url.searchParams.get("edition")));
 
       const info = path.match(/^\/api\/rooms\/([A-Za-z0-9]{5})$/);
       if (info && req.method === "GET") {
@@ -188,7 +191,7 @@ export class Room {
     const url = new URL(req.url);
     const code = req.headers.get("x-room") ?? "";
     if (url.pathname === "/claim") {
-      const ok = this.core.claim(code);
+      const ok = this.core.claim(code, parseEdition(req.headers.get("x-edition")));
       this.core.note("http");
       return ok ? new Response("ok") : new Response("taken", { status: 409 });
     }

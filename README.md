@@ -54,6 +54,16 @@ The game already handles the domain: `www.doodlebattle.in` forwards to `doodleba
    **Add** → **Custom domain** → `doodlebattle.in`. Do it again for `www.doodlebattle.in`.
    Cloudflare creates the records and the HTTPS certificate itself.
 
+## Student edition (students.doodlebattle.in)
+
+The same Worker also serves a version for schools. Pages on `students.doodlebattle.in` create student
+rooms: the host picks a **Class** (7 to 12) instead of a difficulty, and a **Subject** instead of a
+category. To connect the address, repeat step 4 above for `students.doodlebattle.in`. Nothing else is
+needed: there's no separate deploy and rooms live in the same place.
+
+To try it anywhere else (localhost, the preview, workers.dev), open any page with `?students=1`. The
+browser remembers it until you open a page with `?students=0`.
+
 ## Play locally
 
 ```
@@ -100,6 +110,12 @@ same Wi-Fi, use your computer's local IP instead of `localhost`.
   tagged easy, medium or hard. The host picks a difficulty and either one category or all of them, and
   can add their own words. On "mixed", the drawer always gets one easy, one medium and one hard word.
 - **Easy and medium words show their category** next to the blanks, like "ANIMALS".
+- **Student edition: 300+ words from school subjects**, each tagged with the CBSE / NCERT class where
+  the topic is first taught (Tamil Nadu State Board topics are graded where NCERT covers them). Picking
+  Class N uses words up to Class N: this year's topics count as hard, last year's as medium and older
+  ones as easy, so the drawer still gets one of each. Classes 7 to 10 have Science, Maths, History,
+  Geography, Civics, Economics and Computers; from Class 11, Science splits into Physics, Chemistry and
+  Biology, and Accountancy & Business is added. Player photos start off in student rooms.
 - **Spelling slips count.** `girafe`, `elefant`, `baot` and `spider man` all score. Short words need to be
   exact, except for swapped letters (`dgo`). A different real word (`goat` for `boat`) never counts.
 - **Private nudges by meaning.** A synonym is *very close* (`puppy` for dog), as is part of a longer answer
@@ -205,6 +221,7 @@ as one request; billing counts 20 messages as one.
 ```
 public/             website: index.html, styles.css, icons (app.js is built into public/assets)
 src/shared/         protocol types, scoring and guess matching, word lists, practice word picking
+                    (students.ts and student-words.ts are the student edition's classes, subjects and words)
 src/server/room.ts  the game engine (no platform code)
 src/server/worker.ts  Cloudflare Worker + Durable Object wrapper
 src/client/         browser app: connection, canvas, screens (screens/practice.ts is solo practice)
@@ -218,7 +235,7 @@ The tests use [Bun](https://bun.sh) and [Playwright](https://playwright.dev) (in
 `npm i -g playwright && npx playwright install chromium`, or point `PW_PATH` at an existing copy):
 
 ```
-bun test                                  # engine, rules and the Durable Object wrapper
+bun test                                  # engine, rules, the Durable Object wrapper and the student edition
 FAST=1 bun dev/server.ts &                # local server with short timers
 node tests/e2e.mjs                        # laptop + iPad + phone play a full game
 node tests/e2e-net.mjs                    # dropped, frozen and offline connections, server restart
