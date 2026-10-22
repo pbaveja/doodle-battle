@@ -49,7 +49,7 @@ export const DEFAULT_SETTINGS: Settings = {
   category: "all",
   showCategory: false,
   photos: true,
-  voice: "on",
+  voice: "off",
   edition: "main",
   grade: DEFAULT_GRADE,
   classroom: false,
