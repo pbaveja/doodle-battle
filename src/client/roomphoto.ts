@@ -31,7 +31,8 @@ export function commitPhoto() {
 
 export function syncPhoto() {
   const v = app.view;
-  if (!app.joined || !v) return;
+  // A paired phone plays for a class: it never sends its own photo.
+  if (!app.joined || !v || app.phone) return;
   if (!v.settings.photos) {
     lastSent = null; // the room dropped every photo
     return;

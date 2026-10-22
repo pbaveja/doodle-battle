@@ -10,6 +10,9 @@ import { initLobby, renderLobby, showLobby } from "./screens/lobby";
 import { addDrawing, initOver, renderOver, resetOver } from "./screens/over";
 import { initPractice, leavePractice, showPracticeSetup } from "./screens/practice";
 import { initCamera } from "./camera";
+import { APP_NAME, applyEdition, EDITION_QS } from "./edition";
+import { initPairing, pairCodeFromUrl, renderPairing } from "./pairing";
+import { setSmartboard } from "./smartboard";
 import { clearRoomPhotos, putPhoto, restoreMyPhoto } from "./photos";
 import { commitPhoto, notePhoto, resetPhotoSync, syncPhoto } from "./roomphoto";
 import { sfx, sound, unlock } from "./sound";
@@ -95,6 +98,14 @@ function route() {
     if (code === app.code && app.conn && app.conn.status !== "closed" && app.conn.status !== "stopped") return;
     leavePractice();
     disconnect();
+    // A pairing link (from a class's QR code) joins as that class, with no name to enter.
+    app.pair = pairCodeFromUrl();
+    if (app.pair) {
+      app.code = code;
+      document.title = `Room ${code} · ${APP_NAME}`;
+      connect(code);
+      return;
+    }
     openRoom(code);
   } else if (/^\/practice\/?$/.test(location.pathname)) {
     disconnect();
@@ -115,6 +126,8 @@ function disconnect(sendLeave = false) {
   app.view = app.prev = null;
   app.code = "";
   app.gallery.clear();
+  app.phone = false;
+  document.documentElement.classList.remove("paired-phone");
   clearRoomPhotos();
   resetVoice();
   renderVoice();
@@ -126,7 +139,7 @@ function disconnect(sendLeave = false) {
 /* ---------------- home & join ---------------- */
 
 function showHome() {
-  document.title = "Doodle Battle";
+  document.title = APP_NAME;
   mountProfile("#homeProfile", () => ($("#createErr").hidden = true));
   show("home");
 }
@@ -145,7 +158,7 @@ async function createRoom() {
   btn.textContent = "Creating…";
   err.hidden = true;
   try {
-    const res = await fetchWithTimeout("/api/rooms", { method: "POST" }, 8000);
+    const res = await fetchWithTimeout(`/api/rooms${EDITION_QS}`, { method: "POST" }, 8000);
     const data = (await res.json().catch(() => ({}))) as { code?: string; error?: string };
     if (!res.ok || !data.code) throw new Error(data.error || "Couldn't create a room right now. Try again.");
     store.set("db.seat", { code: data.code, at: Date.now() });
@@ -224,7 +237,7 @@ async function joinByCode(e: Event) {
 
 function openRoom(code: string) {
   app.code = code;
-  document.title = `Room ${code} · Doodle Battle`;
+  document.title = `Room ${code} · ${APP_NAME}`;
   if (!CODE_RE.test(code)) {
     notice("That link doesn't look right", "Room codes are 5 letters and numbers. Check the link, or create a new room.", "home");
     return;
@@ -310,6 +323,10 @@ function connect(code: string) {
   const conn = new Conn(wsUrl(code));
   app.conn = conn;
   conn.onOpen = () => {
+    if (app.pair) {
+      conn.send({ t: "hello", v: PROTOCOL, pair: app.pair });
+      return;
+    }
     conn.send({
       t: "hello",
       v: PROTOCOL,
@@ -332,10 +349,13 @@ function onMessage(m: ServerMsg) {
       app.joined = true;
       app.synced = false;
       app.conn?.markReady();
+      app.phone = !!m.phone;
+      document.documentElement.classList.toggle("paired-phone", app.phone);
       resetPhotoSync();
       voiceWelcome();
       if (document.visibilityState === "hidden") send({ t: "away" });
-      store.set("db.seat", { code: m.code, at: Date.now() });
+      // A paired phone plays for someone else's seat: its own saved seat stays as it was.
+      if (!app.phone) store.set("db.seat", { code: m.code, at: Date.now() });
       break;
     case "state":
       onState(m.s);
@@ -415,6 +435,7 @@ function onState(v: View) {
   syncPhoto();
   syncVoice();
   renderVoice();
+  renderPairing(v);
   // The host turned photos on or off: the look picker shows or hides the camera.
   if (prev && prev.settings.photos !== v.settings.photos) renderProfile();
 }
@@ -519,8 +540,12 @@ function onFatalClose(code: number) {
   } else if (code === CLOSE.KICKED) {
     store.del("db.seat");
     notice("You were removed", "The host removed you from this room.", "home");
+  } else if (code === CLOSE.REPLACED && app.pair) {
+    notice("This phone was unpaired", msg || "The board made a new pairing code. Scan it to pair again.", "home");
   } else if (code === CLOSE.REPLACED) {
     notice("Opened in another tab", "You're playing this game in another tab or window.", "here", "home");
+  } else if (code === CLOSE.BAD_HELLO && app.pair) {
+    notice("Pairing didn't work", msg || "This pairing code doesn't work any more. Scan the new code on the board.", "home");
   } else if (code === CLOSE.BAD_HELLO) {
     notice("Please reload", msg || "Doodle Battle was updated. Reload the page to keep playing.", "reload", "home");
   } else if (code === CLOSE.LEFT) {
@@ -559,6 +584,7 @@ function toggleSound() {
 /* ---------------- boot ---------------- */
 
 function boot() {
+  applyEdition();
   trackViewport();
   initProfile();
   initChat();
@@ -568,12 +594,15 @@ function boot() {
   initPractice({ show, navigate });
   initCamera();
   initVoiceUi();
+  initPairing();
   // Bring back this visit's photo; if the room reconnected first, send it now.
   void restoreMyPhoto().then(() => {
     renderProfile();
     if (app.joined) commitPhoto();
   });
   syncSoundButtons();
+
+  for (const c of $$<HTMLInputElement>("[data-smartboard]")) c.addEventListener("change", () => setSmartboard(c.checked));
 
   $("#createBtn").addEventListener("click", () => {
     unlock();

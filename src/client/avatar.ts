@@ -27,3 +27,6 @@ export function avatarHtml(p: AvatarOwner, size = 40, extra = ""): string {
 }
 
 export const randomFace = () => Math.floor(Math.random() * FACE_COUNT);
+
+/** Shown by a class's name when it has a phone paired (classroom battle). */
+export const PHONE_ICON = `<svg class="phoneicon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-label="Phone paired"><title>Phone paired</title><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg>`;
