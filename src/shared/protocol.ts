@@ -9,6 +9,9 @@ export const CANVAS_H = 900;
 export const DRAW_TIMES = [30, 45, 60, 80, 100, 120, 150, 180] as const;
 export const DIFFICULTIES = ["easy", "medium", "hard", "mixed"] as const;
 export type Difficulty = (typeof DIFFICULTIES)[number];
+/** Voice chat: off, only between drawings ("breaks"), or the whole game with the drawer muted to guessers. */
+export const VOICE_MODES = ["off", "breaks", "on"] as const;
+export type VoiceMode = (typeof VOICE_MODES)[number];
 
 export interface Settings {
   rounds: number;
@@ -24,6 +27,7 @@ export interface Settings {
   showCategory: boolean;
   /** Players may use a photo of themselves. When off, photos aren't sent or kept at all. */
   photos: boolean;
+  voice: VoiceMode;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -37,6 +41,7 @@ export const DEFAULT_SETTINGS: Settings = {
   category: "all",
   showCategory: false,
   photos: true,
+  voice: "on",
 };
 
 export const LIMITS = {
@@ -62,6 +67,10 @@ export const LIMITS = {
   photoMaxChars: 40_000,
   photoBurst: 6,
   photoWindowMs: 30_000,
+  /** A voice handshake (offer or answer, with its connection candidates) is a few KB. */
+  rtcMaxChars: 12_000,
+  rtcBurst: 30,
+  rtcWindowMs: 10_000,
 };
 
 /** Player ink colours. Each player picks one; it tints their name, avatar and buttons. */
@@ -150,6 +159,8 @@ export interface PlayerView {
   away: boolean;
   /** Version of this player's photo, 0 for none (or when the room has photos off). */
   photo: number;
+  /** Connected and in the room's voice chat. */
+  voice: boolean;
 }
 
 export interface TurnScore {
@@ -240,7 +251,11 @@ export type ClientMsg =
   | { t: "lobby" }
   | { t: "drawing"; turn: number }
   /** Set (data URL) or remove (null) your photo. */
-  | { t: "photo"; data: string | null };
+  | { t: "photo"; data: string | null }
+  /** Join or leave the voice chat. */
+  | { t: "voice"; on: boolean }
+  /** A voice handshake for one other player, passed on by the room as is. */
+  | { t: "rtc"; to: string; d: string };
 
 export type ErrCode =
   | "not_found"
@@ -279,7 +294,8 @@ export type ServerMsg =
   | { t: "scored"; id: string; pts: number }
   | ({ t: "drawing" } & GalleryEntry)
   /** A player's photo, sent once per version. */
-  | { t: "photo"; id: string; v: number; data: string };
+  | { t: "photo"; id: string; v: number; data: string }
+  | { t: "rtc"; from: string; d: string };
 
 /** WebSocket close codes. The client does not auto-reconnect after these. */
 export const CLOSE = {

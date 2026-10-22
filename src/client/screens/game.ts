@@ -4,6 +4,7 @@ import { avatarHtml } from "../avatar";
 import { Board, thumbnail, type Tool } from "../board";
 import { focusChat, mountChat, setChatMode } from "../chat";
 import { buzz, sfx } from "../sound";
+import { voiceMark } from "../voiceui";
 import { $, $$, copyText, esc, plural, reducedMotion, twoTap } from "../util";
 
 export let board: Board;
@@ -380,7 +381,7 @@ function renderPlayers(v: View) {
       return `<li class="prow${mine ? " me" : ""}${p.away && !mine ? " off" : ""}${got ? " guessed" : ""}" data-id="${esc(p.id)}" style="--pc:${INKS[p.color]}">
         <span class="rank">${ranks.get(p.id)}</span>
         ${avatarHtml(p, 36)}
-        <div style="min-width:0"><span class="pname"><span>${esc(p.name)}${mine ? " (you)" : ""}</span>${p.id === v.host ? CROWN : ""}</span><span class="pscore">${p.score} pts</span></div>
+        <div style="min-width:0"><span class="pname"><span>${esc(p.name)}${mine ? " (you)" : ""}</span>${p.id === v.host ? CROWN : ""}${voiceMark(p)}</span><span class="pscore">${p.score} pts</span></div>
         ${badge}${plusHtml}
       </li>`;
     })

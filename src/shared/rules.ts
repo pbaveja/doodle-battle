@@ -1,6 +1,6 @@
 import {
   BRUSH_SIZES, CANVAS_H, CANVAS_W, CODE_ALPHABET, DEFAULT_SETTINGS, DIFFICULTIES, DRAW_TIMES,
-  FACE_COUNT, INKS, LIMITS, PALETTE, type Item, type Op, type Result, type Settings,
+  FACE_COUNT, INKS, LIMITS, PALETTE, VOICE_MODES, type Item, type Op, type Result, type Settings,
 } from "./protocol";
 import { CATEGORY_IDS } from "./categories";
 
@@ -294,6 +294,7 @@ export function sanitizeSettings(input: unknown, current: Settings, playerCount:
   if (typeof i.category === "string" && (i.category === "all" || CATEGORY_IDS.includes(i.category))) s.category = i.category;
   if (typeof i.showCategory === "boolean") s.showCategory = i.showCategory;
   if (typeof i.photos === "boolean") s.photos = i.photos;
+  if (typeof i.voice === "string" && (VOICE_MODES as readonly string[]).includes(i.voice)) s.voice = i.voice as Settings["voice"];
   return s;
 }
 
