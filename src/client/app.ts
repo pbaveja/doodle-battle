@@ -52,6 +52,10 @@ export const app = {
   chat: [] as ChatMsg[],
   gallery: new Map<number, Thumb>(),
   lastErr: "",
+  /** Classroom battle: the pairing code this page joined with, so it plays for that class's seat. */
+  pair: null as string | null,
+  /** The room confirmed this page is a phone paired with a class's seat. */
+  phone: false,
 };
 
 export function saveProfile() {

@@ -77,6 +77,8 @@ export default {
 interface Attachment {
   cid: string;
   pid: string | null;
+  /** A phone paired with the player's seat. */
+  phone?: boolean;
 }
 
 export class Room {
@@ -106,7 +108,7 @@ export class Room {
           continue;
         }
         this.sockets.set(a.cid, ws);
-        this.core.rebind(a.cid, a.pid);
+        this.core.rebind(a.cid, a.pid, !!a.phone);
       }
       this.core.onAlarm();
     });
@@ -127,9 +129,9 @@ export class Room {
         }
         queueMicrotask(() => this.core.onClose(cid));
       },
-      bind: (cid, pid) => {
+      bind: (cid, pid, phone) => {
         const ws = this.sockets.get(cid);
-        if (ws) ws.serializeAttachment({ cid, pid } satisfies Attachment);
+        if (ws) ws.serializeAttachment({ cid, pid, ...(phone ? { phone } : {}) } satisfies Attachment);
       },
       schedule: (at, durable) => {
         if (this.timer) clearTimeout(this.timer);

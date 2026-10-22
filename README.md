@@ -82,6 +82,21 @@ only, and switching it on also goes full screen. The game menu has the switch an
   while the keys are up, so the panel's own keyboard never pops up over the drawing. A keyboard plugged into
   the panel types into the keys too.
 
+## Classroom battle
+
+Classrooms play each other, one smartboard per class. The host ticks **Classroom battle** in the lobby:
+each player is then a class ("8B"), and the room says "Classes" instead of "Players".
+
+- **Pair a phone.** A class's board can pair a phone (the teacher's, or a student's) with its seat:
+  **Pair a phone** in the lobby or the game menu shows a QR code. The phone that scans it joins as that
+  class, with no name to enter and no new seat. It gets everything the board gets: on the class's turn it
+  can pick the word and draw (the board shows the drawing), and on other turns it types guesses for the
+  class with the phone's own keyboard. If the class is the host, the phone can start and run the game.
+- It can't change the class's name, look or photo, and leaving on the phone only unpairs the phone.
+  A seat takes up to three phones, and players see a phone icon by classes that have one.
+- **New code** on the pairing screen unpairs every phone and stops the old QR code working. Anyone
+  with the code can play for the class, so make a new one if it gets shared around.
+
 ## Play locally
 
 ```
@@ -253,7 +268,7 @@ The tests use [Bun](https://bun.sh) and [Playwright](https://playwright.dev) (in
 `npm i -g playwright && npx playwright install chromium`, or point `PW_PATH` at an existing copy):
 
 ```
-bun test                                  # engine, rules, the Durable Object wrapper and the student edition
+bun test                                  # engine, rules, the Durable Object wrapper, student edition, phone pairing
 FAST=1 bun dev/server.ts &                # local server with short timers
 node tests/e2e.mjs                        # laptop + iPad + phone play a full game
 node tests/e2e-net.mjs                    # dropped, frozen and offline connections, server restart
@@ -262,6 +277,7 @@ node tests/e2e-away.mjs                   # stepping away, host role, phone home
 node tests/e2e-practice.mjs               # practice on laptop, iPad and phones, upright and sideways
 node tests/e2e-voice.mjs                  # voice chat: calls, muting, turn rules, reconnects, message counts, phone layout
 node tests/e2e-smartboard.mjs             # two classrooms on 65" panels: the drawing pad and on-screen keys
+node tests/e2e-classroom.mjs              # classroom battle: a paired phone starts, draws and guesses for its class
 LAG=150 FAST=1 bun dev/server.ts          # add 150 ms each way to test under latency
 ```
 

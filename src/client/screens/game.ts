@@ -1,8 +1,9 @@
 import { INKS, PALETTE, PALETTE_NAMES, TIMING, type View } from "../../shared/protocol";
 import { app, inviteLink, isHost, player, send, serverNow, toast } from "../app";
-import { avatarHtml } from "../avatar";
+import { avatarHtml, PHONE_ICON } from "../avatar";
 import { Board, thumbnail, type Tool } from "../board";
 import { focusChat, mountChat, setChatMode } from "../chat";
+import { openPairing } from "../pairing";
 import {
   canFullscreen, initSmartboard, isFullscreen, isSmartboard, renderSmartboard, setSmartboard, toggleFullscreen,
 } from "../smartboard";
@@ -122,6 +123,10 @@ export function initGame(onLeave: () => void) {
     toast(ok ? "Invite link copied" : `Share this link: ${inviteLink()}`, !ok, ok ? 2600 : 6000);
     closeMenu();
   });
+  $("#menuPair").addEventListener("click", () => {
+    closeMenu();
+    openPairing();
+  });
   $("#menuBoard").addEventListener("click", () => {
     setSmartboard(!isSmartboard());
     closeMenu();
@@ -158,6 +163,8 @@ function renderMenu() {
   const v = app.view;
   $("#menuCode").textContent = app.code;
   syncBoardSwitches();
+  $("#menuPair").hidden = !(v?.settings.classroom && !app.phone);
+  $("#menuBoard").hidden = app.phone;
   const full = $("#menuFull");
   full.hidden = !canFullscreen();
   full.textContent = isFullscreen() ? "Exit full screen" : "Full screen";
@@ -249,7 +256,9 @@ export function renderGame(v: View, prev: View | null) {
   const drawing = v.phase === "drawing";
 
   $("#game").classList.toggle("is-drawer", isDrawer && (drawing || v.phase === "choosing"));
-  $("#roundLabel").innerHTML = v.phase === "waiting" ? "Paused" : `Round ${v.round}<span class="of"> of ${v.rounds}</span>`;
+  const round = v.phase === "waiting" ? "Paused" : `Round ${v.round}<span class="of"> of ${v.rounds}</span>`;
+  // A paired phone says whose seat it plays for.
+  $("#roundLabel").innerHTML = app.phone ? `${round}<span class="phonechip">${PHONE_ICON}${esc(player(you)?.name ?? "")}</span>` : round;
 
   // Sounds and haptics on transitions
   if (prev) {
@@ -410,7 +419,7 @@ function renderPlayers(v: View) {
       return `<li class="prow${mine ? " me" : ""}${p.away && !mine ? " off" : ""}${got ? " guessed" : ""}" data-id="${esc(p.id)}" style="--pc:${INKS[p.color]}">
         <span class="rank">${ranks.get(p.id)}</span>
         ${avatarHtml(p, 36)}
-        <div style="min-width:0"><span class="pname"><span>${esc(p.name)}${mine ? " (you)" : ""}</span>${p.id === v.host ? CROWN : ""}${voiceMark(p)}</span><span class="pscore">${p.score} pts</span></div>
+        <div style="min-width:0"><span class="pname"><span>${esc(p.name)}${mine ? " (you)" : ""}</span>${p.id === v.host ? CROWN : ""}${voiceMark(p)}${p.phones ? PHONE_ICON : ""}</span><span class="pscore">${p.score} pts</span></div>
         ${badge}${plusHtml}
       </li>`;
     })
@@ -448,13 +457,14 @@ const LEVEL_PRIZE = { easy: "", medium: " ×1.25", hard: " ×1.5", custom: "" } 
 
 function revealReason(v: View): string {
   const drawer = player(v.drawer);
+  const [who, whos] = v.settings.classroom ? ["class", "classes"] : ["player", "players"];
   const name = esc(drawer?.name ?? "The drawer");
   switch (v.reason) {
     case "all": return "Everyone guessed it!";
     case "drawer_left": return `${name} left, so the turn ended early.`;
     case "ended": return "Everyone else left, so the turn ended.";
-    case "skipped": return `${name} ended their turn.${v.guessed.length ? ` ${plural(v.guessed.length, "player")} got it.` : ""}`;
-    default: return v.guessed.length === 0 ? "Nobody got it this time." : `${plural(v.guessed.length, "player")} got it.`;
+    case "skipped": return `${name} ended their turn.${v.guessed.length ? ` ${plural(v.guessed.length, who, whos)} got it.` : ""}`;
+    default: return v.guessed.length === 0 ? "Nobody got it this time." : `${plural(v.guessed.length, who, whos)} got it.`;
   }
 }
 

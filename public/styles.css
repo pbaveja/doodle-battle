@@ -723,6 +723,36 @@ html.smartboard .palette { grid-template-columns: repeat(14, minmax(0, 40px)); g
 /* The keys replace the chat box while guessing, so the panel's own keyboard can't pop up */
 .game.keys-on .chatform { display: none; }
 
+/* ---------- classroom battle: pairing a phone ---------- */
+.pairsheet { width: min(100%, 760px); }
+.pairbody { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 20px; align-items: center; padding: 18px 20px 22px; }
+.qr { background: #fff; border-radius: 14px; padding: 6px; box-shadow: inset 0 0 0 1px var(--line); aspect-ratio: 1; display: grid; place-items: center; }
+.qr svg { display: block; width: 100%; height: auto; }
+.pairtext { display: grid; gap: 12px; align-content: start; }
+.pairtext .lede { font-size: 17px; max-width: none; }
+.pairstatus { font-weight: 700; color: var(--muted); }
+.pairstatus.on { color: var(--good); }
+.pairlink { width: 100%; height: 42px; border: 0; border-radius: 10px; padding: 0 12px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line); font: 500 13px var(--mono); color: var(--muted); }
+.pairactions { display: flex; gap: 8px; flex-wrap: wrap; }
+#pairBtn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+#pairBtn[hidden] { display: none; }
+.phoneicon { flex: none; color: var(--muted); }
+.phonenote { font-weight: 600; color: var(--muted); }
+.phonechip { display: inline-flex; align-items: center; gap: 4px; margin-left: 10px; padding: 4px 8px; border-radius: 999px; background: var(--ink); color: var(--card); letter-spacing: .04em; }
+.phonechip .phoneicon { color: inherit; }
+/* A paired phone plays for its class: it can't change the class's name, look or photo. */
+html.paired-phone #meEdit, html.paired-phone .boardcheck { display: none; }
+/* Voice chat runs on the class's board; the room doesn't take a paired phone into it. */
+html.paired-phone .voice-slot { display: none !important; }
+html.smartboard .pairsheet { width: min(100%, 980px); }
+html.smartboard .pairbody { grid-template-columns: minmax(0, 420px) minmax(0, 1fr); }
+html.smartboard .pairtext .lede { font-size: 22px; }
+html.smartboard .pairstatus { font-size: 22px; }
+@media (max-width: 699px) {
+  .pairbody { grid-template-columns: minmax(0, 1fr); justify-items: center; }
+  .qr { width: min(100%, 280px); }
+}
+
 /* ================= responsive ================= */
 
 /* Medium screens (iPad landscape, small laptops) */

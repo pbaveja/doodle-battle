@@ -212,12 +212,14 @@
         <div class="invite">
           <button class="btn primary" type="button" id="copyLink">Copy invite link</button>
           <input class="copyfallback" id="copyFallback" readonly hidden aria-label="Invite link">
+          <button class="btn secondary" type="button" id="pairBtn" hidden><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg> Pair a phone</button>
         </div>
         <div class="listhead">
-          <h2 class="h3">Players</h2>
+          <h2 class="h3" id="playersTitle">Players</h2>
           <span class="count" id="lobbyCount">1 of 8</span>
         </div>
         <ul class="plist lobby-players" id="lobbyPlayers"></ul>
+        <p class="phonenote" id="phoneNote" hidden></p>
         <details class="me-edit" id="meEdit">
           <summary>Change your name or look</summary>
           <div class="profile-slot" id="lobbyProfile"></div>
@@ -305,6 +307,9 @@
             </div>
           </div>
           <div class="setting wide">
+            <label class="check"><input type="checkbox" id="classroomOn"> <span>Classroom battle <span class="opt">Each player is a class on its own smartboard, and can pair a phone to type guesses or draw</span></span></label>
+          </div>
+          <div class="setting wide">
             <label class="check"><input type="checkbox" id="photosOn"> <span>Player photos <span class="opt">Players can use a photo of themselves</span></span></label>
           </div>
           <div class="setting wide">
@@ -360,6 +365,7 @@
             <p class="menu-code practice-only">Practice</p>
             <button type="button" class="menuitem room-only" id="menuInvite">Copy invite link</button>
             <button type="button" class="menuitem" id="menuSound" data-sound-text>Sound: on</button>
+            <button type="button" class="menuitem room-only" id="menuPair" hidden>Pair a phone</button>
             <button type="button" class="menuitem room-only" id="menuBoard">Smartboard view: off</button>
             <button type="button" class="menuitem room-only" id="menuFull">Full screen</button>
             <button type="button" class="menuitem room-only danger" id="menuSkip" hidden>End my turn</button>
@@ -516,6 +522,31 @@
     <label class="sr" for="nameInput">Your name</label>
     <input class="name-in" id="nameInput" maxlength="16" autocomplete="nickname" autocapitalize="words" spellcheck="false" placeholder="Your name">
     <div class="inks" id="inks" role="radiogroup" aria-label="Your colour"></div>
+  </div>
+
+  <!-- Classroom battle: pair a phone with this class's seat -->
+  <div class="sheet-back" id="pairSheet" hidden>
+    <section class="sheet pairsheet" role="dialog" aria-modal="true" aria-labelledby="pairTitle">
+      <header class="sheet-head">
+        <h2 class="h3" id="pairTitle">Pair a phone</h2>
+        <button class="iconbtn" type="button" id="pairClose" aria-label="Close">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </header>
+      <div class="sheet-body pairbody">
+        <div class="qr" id="pairQr" aria-label="Pairing QR code" role="img"></div>
+        <div class="pairtext">
+          <p class="lede">Scan this with the teacher's phone (or a student's). It plays for <b id="pairName">this class</b>: type guesses on it, or draw on it when it's your turn.</p>
+          <p class="pairstatus" id="pairStatus">No phones paired yet</p>
+          <input class="pairlink" id="pairLink" readonly aria-label="Pairing link">
+          <div class="pairactions">
+            <button class="btn secondary small" type="button" id="pairCopy">Copy link</button>
+            <button class="btn ghost small" type="button" id="pairReset">New code</button>
+          </div>
+          <p class="hint">A new code unpairs any phones already paired. Anyone with the code can play for this class.</p>
+        </div>
+      </div>
+    </section>
   </div>
 
   <!-- Look picker: characters and your photo -->

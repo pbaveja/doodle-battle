@@ -2,7 +2,7 @@ import { DRAW_TIMES, INKS, LIMITS, type Settings, type View } from "../../shared
 import { CATEGORIES } from "../../shared/categories";
 import { GRADES, subjectOptions } from "../../shared/students";
 import { app, inviteLink, isHost, me, send, toast } from "../app";
-import { avatarHtml } from "../avatar";
+import { avatarHtml, PHONE_ICON } from "../avatar";
 import { mountChat } from "../chat";
 import { commitPhoto } from "../roomphoto";
 import { voiceMark } from "../voiceui";
@@ -92,6 +92,10 @@ export function initLobby(onLeave: () => void) {
     box.hidden = !box.hidden;
     info.setAttribute("aria-expanded", String(!box.hidden));
   });
+  $<HTMLInputElement>("#classroomOn").addEventListener("change", (e) => {
+    if (!isHost()) return;
+    send({ t: "settings", s: { classroom: (e.target as HTMLInputElement).checked } });
+  });
   $<HTMLInputElement>("#photosOn").addEventListener("change", (e) => {
     if (!isHost()) return;
     send({ t: "settings", s: { photos: (e.target as HTMLInputElement).checked } });
@@ -151,6 +155,16 @@ export function renderLobby(v: View) {
   const connected = v.players.filter((p) => !p.away).length;
   $("#lobbyCount").textContent = `${v.players.length} of ${v.settings.maxPlayers}`;
   const host = isHost();
+  // Classroom battle: every player is a class, and a class's board can pair a phone.
+  const classroom = v.settings.classroom;
+  const noun = classroom ? "class" : "player";
+  const nouns = classroom ? "classes" : "players";
+  $("#playersTitle").textContent = classroom ? "Classes" : "Players";
+  $("#lMax").textContent = classroom ? "Max classes" : "Max players";
+  $("#pairBtn").hidden = !classroom || app.phone;
+  const mine = v.players.find((p) => p.id === v.you);
+  $("#phoneNote").hidden = !app.phone;
+  if (app.phone) $("#phoneNote").textContent = `This phone plays for ${mine?.name ?? "its class"}.`;
 
   $("#lobbyPlayers").innerHTML = v.players
     .map((p) => {
@@ -158,7 +172,7 @@ export function renderLobby(v: View) {
       const status = p.away && !mine ? "Away" : mine ? "You" : p.id === v.host ? "Host" : "Ready";
       return `<li class="prow${mine ? " me" : ""}${p.away && !mine ? " off" : ""}" data-id="${esc(p.id)}" style="--pc:${INKS[p.color]}">
         ${avatarHtml(p, 36)}
-        <div><span class="pname"><span>${esc(p.name)}</span>${p.id === v.host ? CROWN : ""}${voiceMark(p)}</span><span class="pmeta">${status}</span></div>
+        <div><span class="pname"><span>${esc(p.name)}</span>${p.id === v.host ? CROWN : ""}${voiceMark(p)}${p.phones ? PHONE_ICON : ""}</span><span class="pmeta">${status}</span></div>
         <div class="pside">${host && !mine ? `<button type="button" class="kick" data-pid="${esc(p.id)}">Remove</button>` : ""}</div>
       </li>`;
     })
@@ -215,6 +229,9 @@ export function renderLobby(v: View) {
     b.setAttribute("aria-checked", String(b.dataset.v === (s.voice ?? "off")));
     b.tabIndex = host ? 0 : -1;
   }
+  const cls = $<HTMLInputElement>("#classroomOn");
+  cls.checked = classroom;
+  cls.disabled = !host;
   const photos = $<HTMLInputElement>("#photosOn");
   photos.checked = s.photos !== false;
   photos.disabled = !host;
@@ -232,7 +249,7 @@ export function renderLobby(v: View) {
   start.disabled = connected < 2;
   $("#startHint").textContent = host
     ? connected < 2
-      ? "Share the link. You need at least one more player to start."
-      : `${connected} players ready. Start when everyone's in.`
+      ? `Share the link. You need at least one more ${noun} to start.`
+      : `${connected} ${nouns} ready. Start when everyone's in.`
     : `Waiting for ${hostName} to start the game.`;
 }

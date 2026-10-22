@@ -306,6 +306,7 @@ export function sanitizeSettings(input: unknown, current: Settings, playerCount:
   if (typeof i.showCategory === "boolean") s.showCategory = i.showCategory;
   if (typeof i.photos === "boolean") s.photos = i.photos;
   if (typeof i.voice === "string" && (VOICE_MODES as readonly string[]).includes(i.voice)) s.voice = i.voice as Settings["voice"];
+  if (typeof i.classroom === "boolean") s.classroom = i.classroom;
   return s;
 }
 

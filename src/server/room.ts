@@ -51,7 +51,7 @@ export interface RoomIO {
   send(cid: string, data: string): void;
   close(cid: string, code: number, reason: string): void;
   /** Remember which player a connection belongs to (survives hibernation on Cloudflare). */
-  bind(cid: string, pid: string | null): void;
+  bind(cid: string, pid: string | null, phone?: boolean): void;
   /** Wake the room at `at` (in-memory timer) and durably at `durableAt` (alarm). */
   schedule(at: number | null, durableAt: number | null): void;
   save(entries: Record<string, unknown>): void;
@@ -84,6 +84,8 @@ interface Player {
   photo?: number;
   /** In the voice chat. Each new connection starts outside it; the page joins again if it's still in. */
   voice?: boolean;
+  /** Classroom battle: the code a phone scans to pair with this player's seat. */
+  pair?: string | null;
 }
 
 interface Turn {
@@ -116,6 +118,18 @@ interface Conn {
   photo: number[];
   /** Times of recent voice handshakes passed on, for rate limiting. */
   rtc: number[];
+  /** A phone paired with the player's seat: it plays for them, alongside their own screen. */
+  phone?: boolean;
+}
+
+/** Most phones one seat can have paired at once. */
+const MAX_PHONES = 3;
+/** What a paired phone can do: play the class's turn and run the game, but not change who the class is. */
+const PHONE_TYPES = new Set(["draw", "chat", "choose", "sync", "settings", "start", "kick", "skip", "end", "lobby", "drawing", "leave"]);
+
+function pairCode(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(12));
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
 type Vis = "all" | string[];
@@ -183,7 +197,7 @@ const newTally = (since: number): Tally => ({ since, types: {}, connects: 0, clo
 const CLIENT_TYPES: Record<ClientMsg["t"], true> = {
   hello: true, ping: true, hb: true, profile: true, settings: true, start: true, choose: true,
   draw: true, sync: true, chat: true, kick: true, leave: true, end: true, skip: true, away: true,
-  back: true, lobby: true, drawing: true, photo: true, voice: true, rtc: true,
+  back: true, lobby: true, drawing: true, photo: true, voice: true, rtc: true, pair: true,
 };
 
 /** A player's photo. Stored under its own key (`photo:<pid>`) so the frequent state saves stay small. */
@@ -229,6 +243,8 @@ export class RoomCore {
   points = 0;
 
   private conns = new Map<string, Conn>();
+  /** Paired phones by player id. */
+  private phones = new Map<string, Set<string>>();
   private viewDirty = false;
   private stateDirty = false;
   private stateUrgent = false;
@@ -353,11 +369,15 @@ export class RoomCore {
   }
 
   /** Re-attach a live socket after the room was reloaded from storage. */
-  rebind(cid: string, pid: string | null) {
+  rebind(cid: string, pid: string | null, phone = false) {
     const now = this.io.now();
-    this.conns.set(cid, { pid, opened: now, seen: now, chat: [], drawWindow: 0, drawCount: 0, photo: [], rtc: [] });
+    this.conns.set(cid, { pid, opened: now, seen: now, chat: [], drawWindow: 0, drawCount: 0, photo: [], rtc: [], phone });
     if (!pid) return;
     const p = this.players.get(pid);
+    if (p && phone) {
+      this.addPhone(pid, cid);
+      return;
+    }
     if (p) {
       p.cid = cid;
       p.leftAt = null;
@@ -416,7 +436,10 @@ export class RoomCore {
   private dropConn(cid: string, now: number) {
     const conn = this.conns.get(cid);
     this.conns.delete(cid);
-    if (conn?.pid) {
+    if (conn?.pid && conn.phone) {
+      this.phones.get(conn.pid)?.delete(cid);
+      this.markView(false);
+    } else if (conn?.pid) {
       const p = this.players.get(conn.pid);
       if (p && p.cid === cid) {
         p.cid = null;
@@ -490,9 +513,20 @@ export class RoomCore {
     }
 
     const p = conn.pid ? this.players.get(conn.pid) : undefined;
-    if (!p || p.cid !== cid) return;
+    if (!p) return;
+    if (conn.phone) {
+      if (!this.phones.get(p.id)?.has(cid) || !PHONE_TYPES.has(m.t)) return;
+      if (m.t === "leave") {
+        this.dropPhone(cid, CLOSE.LEFT, "left");
+        this.flush();
+        return;
+      }
+    } else if (p.cid !== cid) return;
 
     switch (m.t) {
+      case "pair":
+        this.onPair(p, m.reset === true);
+        break;
       case "draw":
         this.onDraw(cid, conn, p, m);
         break;
@@ -573,6 +607,10 @@ export class RoomCore {
     if (!this.exists()) {
       this.err(cid, "not_found", "This room doesn't exist any more.");
       this.io.close(cid, CLOSE.NOT_FOUND, "not found");
+      return;
+    }
+    if (m.pair !== undefined) {
+      this.helloPhone(cid, conn, m, now);
       return;
     }
     const pid = typeof m.pid === "string" && PID_RE.test(m.pid) ? m.pid : null;
@@ -660,6 +698,70 @@ export class RoomCore {
     this.sendCanvas(cid);
     this.sendTo(cid, { t: "chatlog", list: this.chatFor(pid) });
     this.markView(true);
+  }
+
+  /** A phone joins a player's seat with the code from their pairing QR code. */
+  private helloPhone(cid: string, conn: Conn, m: Record<string, unknown>, now: number) {
+    const code = typeof m.pair === "string" && m.pair.length >= 8 && m.pair.length <= 64 ? m.pair : null;
+    const p = code ? [...this.players.values()].find((o) => o.pair === code) : undefined;
+    if (!p || m.v !== PROTOCOL) {
+      this.err(cid, "bad_hello", m.v !== PROTOCOL ? "Please reload the page to get the latest version." : "This pairing code doesn't work any more. Scan the new code on the board.");
+      this.io.close(cid, CLOSE.BAD_HELLO, "bad pair");
+      return;
+    }
+    const list = this.phones.get(p.id);
+    if (list && list.size >= MAX_PHONES && !list.has(cid)) {
+      this.err(cid, "room_full", `${p.name} already has ${MAX_PHONES} phones paired.`);
+      this.io.close(cid, CLOSE.FULL, "too many phones");
+      return;
+    }
+    conn.pid = p.id;
+    conn.phone = true;
+    this.addPhone(p.id, cid);
+    this.io.bind(cid, p.id, true);
+    this.emptySince = null;
+    this.sendTo(cid, { t: "welcome", you: p.id, code: this.code, phone: true });
+    for (const [id, ph] of this.photos) this.sendTo(cid, { t: "photo", id, v: ph.v, data: ph.data });
+    this.sendTo(cid, { t: "state", s: this.view(p.id, now) });
+    this.sendCanvas(cid);
+    this.sendTo(cid, { t: "chatlog", list: this.chatFor(p.id) });
+    this.markView(false);
+  }
+
+  private addPhone(pid: string, cid: string) {
+    let list = this.phones.get(pid);
+    if (!list) this.phones.set(pid, (list = new Set()));
+    list.add(cid);
+  }
+
+  /** Disconnect one paired phone. */
+  private dropPhone(cid: string, code: number, reason: string) {
+    const conn = this.conns.get(cid);
+    if (conn?.pid) this.phones.get(conn.pid)?.delete(cid);
+    if (conn) conn.pid = null;
+    this.io.bind(cid, null);
+    this.io.close(cid, code, reason);
+    this.markView(false);
+  }
+
+  /** Make (or remake) a player's pairing code. Remaking it unpairs their phones. */
+  private onPair(p: Player, reset: boolean) {
+    if (p.pair && !reset) return;
+    p.pair = pairCode();
+    if (reset) {
+      for (const cid of [...(this.phones.get(p.id) ?? [])]) {
+        this.err(cid, "replaced", "The board made a new pairing code, so this phone was unpaired.");
+        this.dropPhone(cid, CLOSE.REPLACED, "unpaired");
+      }
+    }
+    this.markView(true);
+  }
+
+  /** Every connection that plays for a player: their own screen and any paired phones. */
+  private cidsOf(p: Player): string[] {
+    const list = this.phones.get(p.id);
+    if (!list?.size) return p.cid ? [p.cid] : [];
+    return p.cid ? [p.cid, ...list] : [...list];
   }
 
   private pickColor(wanted: number | null): number {
@@ -756,6 +858,7 @@ export class RoomCore {
     const t = this.players.get(target);
     if (!t) return;
     this.kicked.add(t.id);
+    for (const cid of [...(this.phones.get(t.id) ?? [])]) this.dropPhone(cid, CLOSE.KICKED, "kicked");
     if (t.cid) {
       const cid = t.cid;
       this.err(cid, "kicked", "The host removed you from this room.");
@@ -770,6 +873,8 @@ export class RoomCore {
   private removePlayer(p: Player, why: "left" | "kicked" | "timeout", now: number) {
     if (!this.players.has(p.id)) return;
     this.players.delete(p.id);
+    for (const cid of [...(this.phones.get(p.id) ?? [])]) this.dropPhone(cid, CLOSE.LEFT, "left");
+    this.phones.delete(p.id);
     this.dropPhoto(p);
     this.queue = this.queue.filter((id) => id !== p.id);
     this.sys(why === "kicked" ? `${p.name} was removed by the host.` : `${p.name} left.`);
@@ -1339,7 +1444,8 @@ export class RoomCore {
       this.canvasV += applied;
       this.canvasDirty = true;
       const relay = JSON.stringify({ t: "draw", v: base, ops: applied === ops.length ? ops : ops.slice(0, applied) } satisfies ServerMsg);
-      for (const o of this.players.values()) if (o.cid && o.id !== p.id) this.io.send(o.cid, relay);
+      // The drawer's other screen (the board, or its paired phone) gets the strokes too.
+      for (const o of this.players.values()) for (const c of this.cidsOf(o)) if (c !== cid) this.io.send(c, relay);
     }
     if (applied < ops.length) this.sendCanvas(cid);
   }
@@ -1429,8 +1535,7 @@ export class RoomCore {
     if (this.chat.length > CHAT_KEEP) this.chat.splice(0, this.chat.length - CHAT_KEEP);
     const data = JSON.stringify({ t: "chat", m } satisfies ServerMsg);
     for (const p of this.players.values()) {
-      if (!p.cid) continue;
-      if (vis === "all" || vis.includes(p.id)) this.io.send(p.cid, data);
+      if (vis === "all" || vis.includes(p.id)) for (const c of this.cidsOf(p)) this.io.send(c, data);
     }
     this.stateDirty = true;
   }
@@ -1463,6 +1568,7 @@ export class RoomCore {
         id: p.id, name: p.name, color: p.color, face: p.face, score: p.score, connected: !!p.cid, away: !this.isActive(p),
         photo: this.settings.photos && this.photos.has(p.id) ? p.photo ?? 0 : 0,
         voice: !!p.voice && !!p.cid,
+        phones: this.phones.get(p.id)?.size ?? 0,
       }));
     const inLobby = this.phase === "lobby" || this.phase === "over";
     return {
@@ -1489,6 +1595,7 @@ export class RoomCore {
       reason: this.phase === "reveal" ? t?.reason ?? null : null,
       results: this.phase === "over" ? this.results : null,
       firstInRound: t?.firstInRound ?? false,
+      pair: this.players.get(pid)?.pair ?? null,
       now,
     };
   }
@@ -1515,7 +1622,7 @@ export class RoomCore {
 
   private broadcast(msg: ServerMsg) {
     const data = JSON.stringify(msg);
-    for (const p of this.players.values()) if (p.cid) this.io.send(p.cid, data);
+    for (const p of this.players.values()) for (const c of this.cidsOf(p)) this.io.send(c, data);
   }
 
   /** Run due timers, push state to everyone, save, and schedule the next wake-up. */
@@ -1526,7 +1633,13 @@ export class RoomCore {
     if (this.destroyed) return;
     if (this.viewDirty) {
       this.viewDirty = false;
-      for (const p of this.players.values()) if (p.cid) this.sendTo(p.cid, { t: "state", s: this.view(p.id, now) });
+      for (const p of this.players.values()) {
+        const cids = this.cidsOf(p);
+        if (cids.length) {
+          const data = JSON.stringify({ t: "state", s: this.view(p.id, now) } satisfies ServerMsg);
+          for (const c of cids) this.io.send(c, data);
+        }
+      }
     }
     const writes: Record<string, unknown> = {};
     if (this.stateDirty && (this.stateUrgent || now - this.lastStateSave >= this.timing.stateSaveMs)) {

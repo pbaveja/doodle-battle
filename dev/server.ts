@@ -51,7 +51,10 @@ function getRoom(code: string): DevRoom {
       if (ws) later(() => { try { ws.close(code, reason); } catch { /* closed */ } });
       queueMicrotask(() => room.core.onClose(cid));
     },
-    bind: () => {},
+    bind: (cid, pid, phone) => {
+      const ws = room.sockets.get(cid);
+      if (ws) Object.assign(ws.data, { pid: pid ?? undefined, phone });
+    },
     schedule: (at) => {
       if (room.timer) clearTimeout(room.timer);
       room.timer = null;
@@ -90,7 +93,10 @@ function restartRoom(code: string) {
   const photos = new Map<string, StoredPhoto>();
   for (const [k, v] of old.storage) if (k.startsWith("photo:")) photos.set(k.slice(6), v as StoredPhoto);
   fresh.core.restore(old.storage.get("state") as never, old.storage.get("canvas") as never, photos);
-  for (const [cid, ws] of fresh.sockets) fresh.core.rebind(cid, (ws.data as { pid?: string }).pid ?? null);
+  for (const [cid, ws] of fresh.sockets) {
+    const d = ws.data as { pid?: string; phone?: boolean };
+    fresh.core.rebind(cid, d.pid ?? null, !!d.phone);
+  }
   fresh.core.onAlarm();
   return true;
 }
