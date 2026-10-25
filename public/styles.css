@@ -646,6 +646,8 @@ textarea:focus { box-shadow: inset 0 0 0 2px var(--you); }
 /* ---------- smartboard view ---------- */
 /* For a classroom's 65" touch screen, read from the back of the room. Key text is about 50px:
    legible text is roughly viewing distance / 200, so 4 cm at 8 m, which is ~53px on a 1080p 65" panel. */
+/* Smartboard view and Classroom battle belong to the student edition only. */
+html:not(.students) .students-only { display: none !important; }
 .boardcheck { font-size: 14px; }
 .boardcheck .opt { display: block; margin-top: 2px; }
 .topbar .boardcheck { font-size: 14px; color: var(--muted); }

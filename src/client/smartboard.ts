@@ -6,6 +6,7 @@
 import { CANVAS_H, CANVAS_W, LIMITS, type View } from "../shared/protocol";
 import { send, toast } from "./app";
 import type { Board } from "./board";
+import { STUDENTS } from "./edition";
 import { sfx } from "./sound";
 import { $, esc, store } from "./util";
 
@@ -19,6 +20,7 @@ const ROWS = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"];
 const LETTER = /[\p{L}\p{N}]/u;
 
 function detect(): boolean {
+  if (!STUDENTS) return false;
   const flag = new URLSearchParams(location.search).get("board");
   if (flag === "1") store.set(KEY, true);
   else if (flag === "0") store.del(KEY);
