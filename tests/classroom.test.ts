@@ -204,9 +204,11 @@ describe("playing from a phone", () => {
 });
 
 describe("classroom setting", () => {
-  test("the host can turn classroom battle on", () => {
+  test("the host can turn classroom battle on, in the student edition only", () => {
+    const students = { ...defaultSettings(), edition: "students" as const };
     expect(defaultSettings().classroom).toBe(false);
-    expect(sanitizeSettings({ classroom: true }, defaultSettings(), 2).classroom).toBe(true);
-    expect(sanitizeSettings({ classroom: "yes" }, defaultSettings(), 2).classroom).toBe(false);
+    expect(sanitizeSettings({ classroom: true }, defaultSettings(), 2).classroom).toBe(false);
+    expect(sanitizeSettings({ classroom: true }, students, 2).classroom).toBe(true);
+    expect(sanitizeSettings({ classroom: "yes" }, students, 2).classroom).toBe(false);
   });
 });
